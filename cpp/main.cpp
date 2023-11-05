@@ -17,10 +17,9 @@
 
 // Read example
 int main() {
-    const std::string path {"test.npy"};
-    npy::npy_data d = npy::read_npy<double>(path);
-
-    std::vector<double> data = d.data;
+    const std::string path {"references.npy"};
+    npy::npy_data d = npy::read_npy<float>(path);
+    std::vector<float> data = d.data;
     std::vector<unsigned long> shape = d.shape;
     bool fortran_order = d.fortran_order;
     std::cout << d.data[0] << std::endl;
