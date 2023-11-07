@@ -4,6 +4,7 @@
 #include <iterator>
 #include <utility>
 #include <unordered_set>
+#include <chrono>
 
 #include <xtensor/xarray.hpp>
 #include <xtensor/xcsv.hpp>
@@ -13,6 +14,7 @@
 
 using namespace std;
 using namespace xt::placeholders;
+using std::cout; using std::endl;
 
 template<class Stream, class Vector, class Begin = decltype(std::begin(std::declval<Vector>()))>
 inline Stream& operator<<(Stream& stream, const Vector& vect) {
@@ -45,6 +47,16 @@ inline auto trim_values(E&& e, const std::string& direction, E2&& e2)
     return strided_view(std::forward<E>(e), { xt::range(begin, end) });
 }
 
+template <
+    class result_t   = std::chrono::milliseconds,
+    class clock_t    = std::chrono::steady_clock,
+    class duration_t = std::chrono::milliseconds
+>
+auto since(std::chrono::time_point<clock_t, duration_t> const& start)
+{
+    return std::chrono::duration_cast<result_t>(clock_t::now() - start);
+}
+
 template<typename T>
 const xt::xarray<float> load(string filename) {
     cout << "Opening " << filename << " file " << endl;
@@ -59,16 +71,22 @@ const xt::xarray<float> load(string filename) {
 
 int main()
 {   
-    const auto output_path = "data/results.npy";
-    const auto all_rmzs = load<float>("data/references_mz.npy");
-    const auto all_rints = load<float>("data/references_int.npy");
+    const auto start = std::chrono::steady_clock::now();
+    
+    const string io_dir = "../data";
+    const string output_path = io_dir + "/results.npy";
+
+    const auto all_rmzs = load<float>(io_dir + "/references_mz.npy");
+    const auto all_rints = load<float>(io_dir + "/references_int.npy");
     // const auto all_rints_bs = load<size_t>("references_batch_size.npy");
 
 
-    const auto all_qmzs = load<float>("data/queries_mz.npy");
-    const auto all_qints = load<float>("data/queries_int.npy");
+    const auto all_qmzs = load<float>(io_dir + "/queries_mz.npy");
+    const auto all_qints = load<float>(io_dir + "/queries_int.npy");
     // const auto all_qints_bs = load<size_t>("queries_batch_size.npy");
     
+    std::cout << "Loaded all files. Elapsed(ms)=" << since(start).count() << std::endl;
+
     const auto fill_value = static_cast<float>(-1e6);
 
     const auto R = all_rmzs.shape()[0];
@@ -81,11 +99,20 @@ int main()
     const auto intensity_power = 1.0f;
     // const auto T = static_cast<int>( max(M, N) );
 
-    auto results = vector<double>();
+    auto results = vector<float>();
 
     // cout << vector<unsigned long int>({R, M, Q, N}) << endl;
+    auto elapsed_steps = R / 10;
+
+    #pragma omp parallel for
     for (size_t r = 0; r < R; r++)
     {
+        if (r % elapsed_steps == elapsed_steps - 1) {
+            std::cout 
+                << "PARALLEL: Done 1/10th chunk, @ ref=" << r
+                << " - Elapsed(ms)=" << since(start).count() << std::endl;
+        }
+
         auto rmzs = trim_values(xt::row(all_rmzs, r), "b", fill_value);
         auto rints = trim_values(xt::row(all_rints, r), "b", fill_value);
         // auto bs_size = xt::view(all_rints_bs, r);
@@ -241,7 +268,18 @@ int main()
                 // auto score_norm = xt::sum(spec1_power) * xt::sum(spec2_power);
                 auto score_norm_result = score_norm();
                 score = score / score_norm_result;
-                results.insert(results.end(), {score, static_cast<double>(used_matches)});
+
+                #pragma omp critical
+                {
+                    results.insert(
+                        results.end(), 
+                        {
+                        static_cast<float>(r), 
+                        static_cast<float>(q), 
+                        score, 
+                        static_cast<float>(used_matches)}
+                    );
+                }
             }
         }
     }
@@ -266,11 +304,15 @@ int main()
     //     }
     // }
 
-    cout << "Dumping results.npy..." << endl;
-    auto xresults = xt::adapt(results, {results.size()/2, 2ul});
+    std::cout << "Dumping results.npy..." << std::endl;
+    auto xresults = xt::adapt(results, {
+        results.size()/4, 
+        4ul
+    });
     xt::dump_npy(output_path, xresults);
     
-    cout << "Done!" << endl;
+    std::cout << "Done! Elapsed(ms)=" << since(start).count() << std::endl;
+
     // xt::xarray<float> a = {{1,2,3,4}, {5,6,7,8}};
     // xt::dump_npy("out.npy", a);
 
