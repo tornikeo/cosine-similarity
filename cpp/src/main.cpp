@@ -12,6 +12,8 @@
 #include <xtensor/xslice.hpp>
 #include <xtensor/xview.hpp>
 
+#include <argparse/argparse.hpp>
+
 using namespace std;
 using namespace xt::placeholders;
 using std::cout; using std::endl;
@@ -69,21 +71,34 @@ const xt::xarray<float> load(string filename) {
     return references;
 }
 
-int main()
-{   
+
+
+int main(int argc, char *argv[]) {
+    argparse::ArgumentParser program("program_name");
+
+    program.add_argument("--input_dir");
+    program.add_argument("--output_dir");
+
+    try {
+        program.parse_args(argc, argv);
+    } catch (const std::exception& err) {
+        std::cerr << err.what() << std::endl;
+        std::cerr << program;
+        return 1;
+    }
+
+    auto input_dir = program.get<string>("--input_dir");
+    auto output_dir = program.get<string>("--output_dir");
+
     const auto start = std::chrono::steady_clock::now();
     
-    const string io_dir = "../data";
-    const string output_path = io_dir + "/results.npy";
+    const string output_path = output_dir + "results.npy";
 
-    const auto all_rmzs = load<float>(io_dir + "/references_mz.npy");
-    const auto all_rints = load<float>(io_dir + "/references_int.npy");
-    // const auto all_rints_bs = load<size_t>("references_batch_size.npy");
+    const auto all_rmzs = load<float>(input_dir + "references_mz.npy");
+    const auto all_rints = load<float>(input_dir + "references_int.npy");
 
-
-    const auto all_qmzs = load<float>(io_dir + "/queries_mz.npy");
-    const auto all_qints = load<float>(io_dir + "/queries_int.npy");
-    // const auto all_qints_bs = load<size_t>("queries_batch_size.npy");
+    const auto all_qmzs = load<float>(input_dir + "queries_mz.npy");
+    const auto all_qints = load<float>(input_dir + "queries_int.npy");
     
     std::cout << "Loaded all files. Elapsed(ms)=" << since(start).count() << std::endl;
 
@@ -274,35 +289,17 @@ int main()
                     results.insert(
                         results.end(), 
                         {
-                        static_cast<float>(r), 
-                        static_cast<float>(q), 
-                        score, 
-                        static_cast<float>(used_matches)}
+                            static_cast<float>(r), 
+                            static_cast<float>(q), 
+                            score, 
+                            static_cast<float>(used_matches)
+                        }
                     );
                 }
             }
         }
     }
     
-    // auto [Q, N] = qmz.shape().data();
-
-    // cout << "Opening queries.npy file " << endl;
-    // in_file.open("queries.npy");
-    // cout << "Loading file in memory" << endl;
-    // auto queries = xt::load_npy<float>(in_file);
-    // cout << "Data file loaded. It has " << queries.shape() << " shape" << endl;
-    // in_file.close();
-
-    // auto ref_mz = xt::xview(references, xt::all(), xt::all(), 0);
-
-    // for (size_t ref_id = 0; ref_id < references.shape()[0]; ref_id++)
-    // {
-    //     for (size_t q_id = 0; q_id < queries.shape()[0]; q_id++)
-    //     {
-    //         auto ref = references(ref_id);
-    //         /* code */
-    //     }
-    // }
 
     std::cout << "Dumping results.npy..." << std::endl;
     auto xresults = xt::adapt(results, {
@@ -312,9 +309,5 @@ int main()
     xt::dump_npy(output_path, xresults);
     
     std::cout << "Done! Elapsed(ms)=" << since(start).count() << std::endl;
-
-    // xt::xarray<float> a = {{1,2,3,4}, {5,6,7,8}};
-    // xt::dump_npy("out.npy", a);
-
     return 0;
 }

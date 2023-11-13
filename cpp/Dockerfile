@@ -1,4 +1,4 @@
-FROM ubuntu:jammy
+FROM ubuntu:jammy as build
 ENV HOME /root
 
 RUN apt-get update && apt-get -y --no-install-recommends install \
@@ -14,6 +14,7 @@ RUN apt-get update && apt-get -y --no-install-recommends install \
 
 WORKDIR /workdir
 COPY src src
+
 COPY CMakeLists.txt .
 RUN set -ex; \
     mkdir build; \
@@ -21,5 +22,12 @@ RUN set -ex; \
     cmake ..; \
     make;
 
-WORKDIR /workdir/build
-CMD ./cosine
+
+FROM python:3.11
+WORKDIR /workdir
+COPY ./requirements.txt /workdir/requirements.txt
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
+COPY --from=build /workdir/build/cosine /workdir/cosine
+COPY  server.py .
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "80"]
+

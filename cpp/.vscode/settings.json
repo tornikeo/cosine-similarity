@@ -73,7 +73,9 @@
         "cinttypes": "cpp",
         "typeindex": "cpp",
         "typeinfo": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "charconv": "cpp",
+        "variant": "cpp"
     },
     "C_Cpp.default.compileCommands": "builddir/compile_commands.json"
 }
