@@ -1,0 +1,178 @@
+from joblib import Parallel, delayed
+from typing import Optional
+from tqdm import tqdm
+import numba
+from typing import Tuple, List
+from matchms import Spectrum
+from matchms.typing import SpectrumType
+import numpy as np
+import pandas as pd
+from pathlib import Path
+import json
+from numba import cuda
+from matchms import Spectrum
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
+from numba import types
+import math
+import warnings
+from numba.core.errors import NumbaPerformanceWarning
+import time
+from time import perf_counter
+from itertools import product
+import matplotlib.pyplot as plt
+from threading import Thread
+
+@numba.njit
+def find_matches(spec1_mz: np.ndarray, spec2_mz: np.ndarray,
+                 tolerance: float, shift: float = 0) -> List[Tuple[int, int]]:
+    """Faster search for matching peaks.
+    Makes use of the fact that spec1 and spec2 contain ordered peak m/z (from
+    low to high m/z).
+
+    Parameters
+    ----------
+    spec1_mz:
+        Spectrum peak m/z values as numpy array. Peak mz values must be ordered.
+    spec2_mz:
+        Spectrum peak m/z values as numpy array. Peak mz values must be ordered.
+    tolerance
+        Peaks will be considered a match when <= tolerance appart.
+    shift
+        Shift peaks of second spectra by shift. The default is 0.
+
+    Returns
+    -------
+    matches
+        List containing entries of type (idx1, idx2).
+
+    """
+    
+    lowest_idx = 0
+    matches = []
+    for peak1_idx in range(spec1_mz.shape[0]):
+        mz = spec1_mz[peak1_idx]
+        low_bound = mz - tolerance
+        high_bound = mz + tolerance
+        for peak2_idx in range(lowest_idx, spec2_mz.shape[0]):
+            mz2 = spec2_mz[peak2_idx] + shift
+            if mz2 > high_bound:
+                break
+            if mz2 < low_bound:
+                lowest_idx = peak2_idx
+            else:
+                matches.append((peak1_idx, peak2_idx))
+                # print((peak1_idx, peak2_idx))
+    # print(matches)
+    return matches
+
+@numba.njit(fastmath=True)
+def score_best_matches(matching_pairs: np.ndarray, spec1: np.ndarray,
+                       spec2: np.ndarray, mz_power: float = 0.0,
+                       intensity_power: float = 1.0) -> Tuple[float, int]:
+    """Calculate cosine-like score by multiplying matches. Does require a sorted
+    list of matching peaks (sorted by intensity product)."""
+    score = float(0.0)
+    used_matches = int(0)
+    used1 = set()
+    used2 = set()
+    for i in range(matching_pairs.shape[0]):
+        if not matching_pairs[i, 0] in used1 and not matching_pairs[i, 1] in used2:
+            score += matching_pairs[i, 2]
+            used1.add(matching_pairs[i, 0])  # Every peak can only be paired once
+            used2.add(matching_pairs[i, 1])  # Every peak can only be paired once
+            # print(i, matching_pairs[i,0], matching_pairs[i,1], used_matches, score)
+            used_matches += 1
+
+    # Normalize score:
+    spec1_power = spec1[:, 0] ** mz_power * spec1[:, 1] ** intensity_power    
+    spec2_power = spec2[:, 0] ** mz_power * spec2[:, 1] ** intensity_power
+
+    # print(spec1_power)
+    # print(spec2_power)
+    # raise
+    score_norm = (np.sum(spec1_power ** 2) ** 0.5 * np.sum(spec2_power ** 2) ** 0.5)
+    # print(score, score_norm, used_matches)
+    score = score/score_norm
+    # print(score, "/", score_norm)
+    # raise
+    return score, used_matches
+
+@numba.njit
+def collect_peak_pairs(spec1: np.ndarray, spec2: np.ndarray,
+                       tolerance: float, shift: float = 0, mz_power: float = 0.0,
+                       intensity_power: float = 1.0):
+    # pylint: disable=too-many-arguments
+    """Find matching pairs between two spectra.
+
+    Args
+    ----
+    spec1:
+        Spectrum peaks and intensities as numpy array.
+    spec2:
+        Spectrum peaks and intensities as numpy array.
+    tolerance
+        Peaks will be considered a match when <= tolerance appart.
+    shift
+        Shift spectra peaks by shift. The default is 0.
+    mz_power:
+        The power to raise mz to in the cosine function. The default is 0, in which
+        case the peak intensity products will not depend on the m/z ratios.
+    intensity_power:
+        The power to raise intensity to in the cosine function. The default is 1.
+
+    Returns
+    -------
+    matching_pairs : numpy array
+        Array of found matching peaks.
+    """
+    matches = find_matches(spec1[:, 0], spec2[:, 0], tolerance, shift)
+    # global a
+    # a = matches
+    # matches_op = find_matches_opt(spec1[:, 0], spec2[:, 0], tolerance, shift)
+    # global b
+    # b = matches_op
+    # assert np.allclose(matches, matches_op)
+    
+    idx1 = [x[0] for x in matches]
+    idx2 = [x[1] for x in matches]
+    
+    if len(idx1) == 0:
+        return None
+    matching_pairs = []
+    for i, idx in enumerate(idx1):
+        power_prod_spec1 = (spec1[idx, 0] ** mz_power) * (spec1[idx, 1] ** intensity_power)
+        power_prod_spec2 = (spec2[idx2[i], 0] ** mz_power) * (spec2[idx2[i], 1] ** intensity_power)
+        matching_pairs.append([idx, idx2[i], power_prod_spec1 * power_prod_spec2])
+    
+    if matching_pairs:
+        return matching_pairs
+    
+@numba.njit
+def similarity(
+    spec1: np.ndarray, spec2: np.ndarray,
+    tolerance: float, shift: float = 0, mz_power: float = 0.0,
+    int_power: float = 1.0
+) -> tuple[float, int]:
+    """
+    Calling score_best_matches after collect_peak_pairs in python code is inefficient
+    because python has to load-offload things from and to njitted functions.
+    
+    This function unifies both to avoid python overhead.
+    
+    Returns score, num_matches tuple for each RQ pair, or None if they don't match.
+    """
+    matching_pairs = collect_peak_pairs(
+            spec1, 
+            spec2, 
+            tolerance=tolerance,
+            shift=shift, 
+            mz_power=mz_power,
+            intensity_power=int_power,
+    )
+    if matching_pairs is not None:
+        matching_pairs = np.array(matching_pairs.copy())
+        matching_pairs = matching_pairs[np.argsort(matching_pairs[:, 2])[::-1], :] 
+        
+        score = score_best_matches(matching_pairs, spec1, spec2, 
+                                    mz_power, int_power)
+        return score
