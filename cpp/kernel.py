@@ -1,5 +1,4 @@
 import math
-
 import numba
 from numba import cuda, types
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
@@ -16,15 +15,21 @@ def compile(
     """
     JIT compiles the kernel for CUDA device, and bakes in constants (tolerance, shift, etc.)
     Returns a callable that takes in arguments:
-        rspec_cu: DeviceNDArray, [2, R, M] float32
-        qspec_cu: DeviceNDArray, [2, Q, N] float32
+        rspec_cu: 
+            DeviceNDArray, [2, R, M] float32 
+        qspec_cu: 
+            DeviceNDArray, [2, Q, N] float32
         lens_cu: DeviceNDArray, [2, max(R,Q)] int32
+            The "2" in front is because these is mz and int stacked on top of each other
         out_cu: DeviceNDArray, [R,Q,2] float32
+            Contains both score (0) and counts (1) for each RQ pair
         overflow_cu: DeviceNDArray, [R,Q,1] uint8
-
+            Contains 1 - if overflow happened at RQ
         stream: cuda.stream
-    That will run the cuda kernel. All arguments must already reside in GPU memory.
-    First call will cause the kernel "warm-up", so subsequent runs will be much faster.
+            Necessary to keep GPU as busy as possible.
+    
+    This callable will run JIT-ed cuda kernel. All arguments must already reside in GPU memory.
+    First-time use will cause the kernel "warm-up", so subsequent runs will be much faster.
     """
     assert cuda.detect(), "Cuda seems to be unavailable"
     MATCH_LIMIT = match_limit

@@ -1,25 +1,6 @@
-import json
-import math
-import time
-import warnings
-from itertools import product
-from pathlib import Path
-from threading import Thread
-from time import perf_counter
-from typing import List, Optional, Tuple
-
-import matplotlib.pyplot as plt
+from typing import List, Tuple
 import numba
 import numpy as np
-import pandas as pd
-from joblib import Parallel, delayed
-from matchms import Spectrum
-from matchms.typing import SpectrumType
-from numba import cuda, types
-from numba.core.errors import NumbaPerformanceWarning
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
-from tqdm import tqdm
-
 
 @numba.njit
 def find_matches(
@@ -174,7 +155,7 @@ def similarity(
 ) -> tuple[float, int]:
     """
     Calling score_best_matches after collect_peak_pairs in python code is inefficient
-    because python has to load-offload things from and to njitted functions.
+    because python has to load/offload things from and to njitted functions.
 
     This function unifies both to avoid python overhead.
 
