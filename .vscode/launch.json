@@ -1,0 +1,12 @@
+{
+    "configurations": [
+        {
+            "name": "Debug with Meson",
+            "type": "gdb",
+            "request": "launch",
+            "target": "./cpp/builddir/main",
+            "cwd": "${workspaceRoot}/cpp",
+            "preLaunchTask": "build debug meson"
+        }
+    ]
+}

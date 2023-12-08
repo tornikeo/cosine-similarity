@@ -11,3 +11,6 @@ pyyaml
 boto3
 python-dotenv
 notebook
+joblib
+pytest
+ipykernel
