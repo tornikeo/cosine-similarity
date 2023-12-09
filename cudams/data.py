@@ -70,15 +70,3 @@ def process_spectrum(spectrum: np.ndarray) -> np.ndarray:
     spectrum = reduce_to_number_of_peaks(spectrum, n_max=1000)
     spectrum = require_minimum_number_of_peaks(spectrum, n_required=5)
     return spectrum
-
-def batches(lst, batch_size):
-    """
-    Batch data from the iterable into tuples of length n. The last batch may be shorter than n.
-    """
-    for i in range(0, len(lst), batch_size):
-        yield lst[i:i + batch_size]
-        
-def mkdir(p:Path) -> Path:
-    p = Path(p)
-    p.mkdir(exist_ok=True)
-    return p
