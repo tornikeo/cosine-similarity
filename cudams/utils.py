@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 import re
 
@@ -15,8 +16,10 @@ def argbatch(lst, batch_size) -> tuple[int, int]:
     for i in range(0, len(lst), batch_size):
         yield i, i + batch_size
         
-def mkdir(p:Path) -> Path:
+def mkdir(p:Path, clean=False) -> Path:
     p = Path(p)
+    if clean and p.is_dir() and p.exists():
+        shutil.rmtree(p, ignore_errors=True)
     p.mkdir(exist_ok=True, parents=True)
     return p
 
