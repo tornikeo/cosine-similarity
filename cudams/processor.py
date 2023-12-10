@@ -45,7 +45,27 @@ class CosineGreedyResults:
     def __str__(self) -> str:
         return f"CosineGreedyResults {str(self.config)}"
     
-    def to_pandas(self):
+    def to_full_matrix(self) -> tuple[np.ndarray, np.ndarray]:
+        BATCH_SIZE = self.config.BATCH_SIZE
+        R = math.ceil( self.len_references / BATCH_SIZE ) * BATCH_SIZE
+        Q = math.ceil( self.len_queries / BATCH_SIZE ) * BATCH_SIZE
+
+        G = np.empty((R, Q, 2), dtype='float32')
+        Ov = np.empty((R, Q, 1), dtype='uint8')
+        
+        files = sorted([f for f in self.files])
+        for file in files:
+            rstart, rend, qstart, qend = name2idx(file)
+            print("FILE HIT", file.stem, rstart, rend, qstart, qend)
+            if 'score' in file.stem:
+                # print('score', file)
+                G[rstart:rend, qstart:qend] = np.load(file)
+            elif 'ovfl' in file.stem:
+                print('ovfl HIT', file, file.stem)
+                Ov[rstart:rend, qstart:qend] = np.load(file)
+        return G, Ov
+    
+    def to_pandas(self) -> pd.DataFrame:
         results = pd.DataFrame([], columns=['Reference','Query','Score','Num_Matches'])
         # scores = sorted(gpu_output_dir.glob('*.score.npy'))
         scores = [f for f in self.files if f.stem.endswith('score')]
@@ -81,24 +101,22 @@ class CosineGreedyResults:
 class CudaCosineGreedy:
     def __init__(self, 
                  config: Config, 
-                 kernel: callable) -> None:
+                 output_dir: Path,
+                 kernel: callable,
+                 ) -> None:
         self.kernel = kernel
         self.config = config
         
-        self.config_str = json.dumps(self.config, sort_keys=True, indent=1, default=str)
-        self.experiment_hash = abs(hash(self.config_str))
+        self.output_dir = output_dir
         self._results = None
         
     def __str__(self) -> str:
-        return json.dumps(self.config, sort_keys=True, indent=1, default=str)
+        return self.config.model_dump_json(indent=1)
 
     def __call__(self, references, queries) -> CosineGreedyResults:
         CONFIG = self.config
         BATCH_SIZE = CONFIG.BATCH_SIZE
         dtype = CONFIG.dtype
-        
-        output_dir = mkdir(Path(f'data/experiments/{self.experiment_hash}'), clean=True)
-        (output_dir / 'config.json').write_text(self.config_str)
         
         batches_r = []
         for bstart, bend in tqdm(argbatch(references, BATCH_SIZE), desc="Batch all references"):
@@ -117,7 +135,7 @@ class CudaCosineGreedy:
 
         TOTAL_BATCHES = len(batches_rq)
 
-        gpu_output_dir = mkdir(output_dir / 'gpu', clean=True)
+        gpu_output_dir = mkdir(self.output_dir, clean=True)
         
         # We initialize a pool of 3 workers that will offload results to disk
         with ThreadPool(3) as pool:
@@ -189,12 +207,18 @@ class CudaCosineGreedy:
                             rstart, rend, qstart, qend
                         ]
                     )
-
+        pool.join()
         # We wait for all streams to finish their work everywhere 
         cuda.synchronize()
+        
+        files = sorted(list(gpu_output_dir.glob('*.npy')))
+        print(files)
+        print(len(files), len(batches_rq))
+        assert len(batches_rq) * 2 == len(files), "Some files are missing."
+        
         self._results = CosineGreedyResults(
             config=self.config,
-            files=sorted(gpu_output_dir.glob('*.npy')),
+            files=sorted(files),
             len_queries=len(queries),
             len_references=len(references),
         )

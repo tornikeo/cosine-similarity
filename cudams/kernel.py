@@ -31,7 +31,6 @@ def compile(
     This callable will run JIT-ed cuda kernel. All arguments must already reside in GPU memory.
     First-time use will cause the kernel "warm-up", so subsequent runs will be much faster.
     """
-    assert cuda.detect(), "Cuda seems to be unavailable"
     MATCH_LIMIT = match_limit
     R, Q = batch_size, batch_size
     THREADS_PER_BLOCK = (32, 32)
