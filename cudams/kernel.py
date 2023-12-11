@@ -15,9 +15,9 @@ def compile(
     """
     JIT compiles the kernel for CUDA device, and bakes in constants (tolerance, shift, etc.)
     Returns a callable that takes in arguments:
-        rspec_cu: 
-            DeviceNDArray, [2, R, M] float32 
-        qspec_cu: 
+        rspec_cu:
+            DeviceNDArray, [2, R, M] float32
+        qspec_cu:
             DeviceNDArray, [2, Q, N] float32
         lens_cu: DeviceNDArray, [2, max(R,Q)] int32
             The "2" in front is because these is mz and int stacked on top of each other
@@ -27,7 +27,7 @@ def compile(
             Contains 1 - if overflow happened at RQ
         stream: cuda.stream
             Necessary to keep GPU as busy as possible.
-    
+
     This callable will run JIT-ed cuda kernel. All arguments must already reside in GPU memory.
     First-time use will cause the kernel "warm-up", so subsequent runs will be much faster.
     """
@@ -71,11 +71,11 @@ def compile(
 
             rleni = rlen[i]
             qlenj = qlen[j]
-            
+
             # When we have batch that is incomplete (size is indivisible by B)
             # we return quickly to avoid writing garbage there.
             if rleni == 0 or qlenj == 0:
-                return 
+                return
 
             spec1_mz = rmz[i]
             spec1_int = rint[i]
@@ -180,7 +180,7 @@ def compile(
         lens_cu: DeviceNDArray,
         out_cu: DeviceNDArray,
         overflow_cu: DeviceNDArray,
-        stream: cuda.stream,
+        stream: cuda.stream = None,
     ):
         _kernel[BLOCKS_PER_GRID, THREADS_PER_BLOCK, stream](
             rspec_cu,

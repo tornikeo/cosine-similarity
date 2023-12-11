@@ -2,6 +2,7 @@ from typing import List, Tuple
 import numba
 import numpy as np
 
+
 @numba.njit
 def find_matches(
     spec1_mz: np.ndarray, spec2_mz: np.ndarray, tolerance: float, shift: float = 0
