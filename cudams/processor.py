@@ -36,8 +36,6 @@ class Config(BaseModel):
     query_csv_file: Path
     BATCH_SIZE: int
     MATCH_LIMIT: int
-    LIMIT: int
-
 
 class CosineGreedyResults:
     def __init__(

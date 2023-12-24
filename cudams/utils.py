@@ -3,6 +3,9 @@ from pathlib import Path
 import re
 import sys
 from contextlib import contextmanager
+import warnings
+from pathlib import Path
+import os
 
 def batches(lst, batch_size) -> list:
     """
@@ -40,3 +43,6 @@ def mute_stdout():
     yield
     sys.stdout = stdout
     
+def ignore_performance_warnings():
+    from numba.core.errors import NumbaPerformanceWarning
+    warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
