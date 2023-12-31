@@ -1,8 +1,9 @@
 import shutil
 from pathlib import Path
 import re
+import contextlib
+import io
 import sys
-from contextlib import contextmanager
 import warnings
 from pathlib import Path
 import os
@@ -36,12 +37,12 @@ def name2idx(p: Path) -> tuple[int, int, int, int]:
     rstart, rend, qstart, qend = map(int, match.groups())
     return rstart, rend, qstart, qend
 
-@contextmanager
+@contextlib.contextmanager
 def mute_stdout():
-    stdout = sys.stdout
-    sys.stdout = None
+    save_stdout = sys.stdout
+    sys.stdout = io.BytesIO()
     yield
-    sys.stdout = stdout
+    sys.stdout = save_stdout
     
 def ignore_performance_warnings():
     from numba.core.errors import NumbaPerformanceWarning

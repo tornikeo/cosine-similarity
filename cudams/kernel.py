@@ -113,9 +113,9 @@ def compile(
 
             # SLOW, calculate norm ( This should be done in several threads )
             # score_norm = types.float32(0.0)
-            score_norm = types.float32(1.0)
-            score_norm_spec1 = types.float32(0.0)
-            score_norm_spec2 = types.float32(0.0)
+            score_norm = types.float64(1.0)
+            score_norm_spec1 = types.float64(0.0)
+            score_norm_spec2 = types.float64(0.0)
 
             for peak1_idx in range(rleni):
                 score_norm_spec1 += (
@@ -131,7 +131,7 @@ def compile(
 
             # Quite slow - Bubble sort (This should also be done in several threads)
             # We need two cases, bubble sort up to 50 elems is fine
-            score = types.float32(0.0)
+            score = types.float64(0.0)
             used_matches = types.int32(0)
             for _ in range(0, num_match):
                 max_prod = types.float64(-1.0)

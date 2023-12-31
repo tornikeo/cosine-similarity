@@ -16,7 +16,6 @@ import warnings
 
 def spectra_peaks_to_tensor(
     spectra: list, dtype: str = "float32", 
-    spectra_len_cutoff: int = 1024,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Working with GPU requires us to have a fixed shape for mz/int arrays.
@@ -28,22 +27,25 @@ def spectra_peaks_to_tensor(
         spectra: [2, len(spectra)] float32
         batch: [len(spectra)] int32
     """
+    # spectra_len_cutoff: int = 1024,
     sp_max_shape = max(len(s.peaks) for s in spectra)
-    if sp_max_shape > spectra_len_cutoff:
-        print(
-            f"""
-            When batching peaks into a tensor, encountered an extremely long spectrum (length {sp_max_shape}).
-            It is not yet possible to fit spectrum this long inside a batch due to memory contstraints. We will
-            only use first {spectra_len_cutoff} elements from spectra like these.
-            """
-        )
-    sp_max_shape = min(sp_max_shape, spectra_len_cutoff)
+    # if sp_max_shape > spectra_len_cutoff:
+    #     print(
+    #         f"""
+    #         When batching peaks into a tensor, encountered an extremely long spectrum (length {sp_max_shape}).
+    #         It is not yet possible to fit spectrum this long inside a batch due to memory contstraints. We will
+    #         only use first {spectra_len_cutoff} elements from spectra like these.
+    #         """
+    #     )
+    # sp_max_shape = min(sp_max_shape, spectra_len_cutoff)
+    # sp_max_shape = min(sp_max_shape, spectra_len_cutoff)
     mz = np.empty((len(spectra), sp_max_shape), dtype=dtype)
     int = np.empty((len(spectra), sp_max_shape), dtype=dtype)
     batch = np.empty(len(spectra), dtype=np.int32)
     for i, s in enumerate(spectra):
         # .to_numpy creates an unneeded copy - we don't need to do that twice
-        spec_len = min(len(s.peaks), spectra_len_cutoff)
+        # spec_len = min(len(s.peaks), spectra_len_cutoff)
+        spec_len = len(s.peaks)
         mz[i, :spec_len] = s._peaks.mz[:spec_len]
         int[i, :spec_len] = s._peaks.intensities[:spec_len]
         batch[i] = spec_len
