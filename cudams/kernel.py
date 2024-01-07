@@ -150,7 +150,9 @@ def compile(
                             spec2_int[peak2_idx] ** int_power
                         )
                         prod = power_prod_spec1 * power_prod_spec2
-
+                        
+                        # > was changed to >= and that took 2 weeks... also finding that 'mergesort' in original similarity algorithm
+                        # is what can prevent instability.
                         if prod >= max_prod:
                             max_prod = prod
                             max_peak1_idx = peak1_idx

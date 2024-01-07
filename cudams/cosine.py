@@ -172,7 +172,9 @@ def similarity(
     )
     if matching_pairs is not None:
         matching_pairs = np.array(matching_pairs.copy())
-        matching_pairs = matching_pairs[np.argsort(matching_pairs[:, 2])[::-1], :]
+        # TODO: kind='stable' doesn't work in nopython mode.
+        # matching_pairs = matching_pairs[np.argsort(matching_pairs[:, 2],kind='stable')[::-1], :]
+        matching_pairs = matching_pairs[np.argsort(matching_pairs[:, 2], kind='mergesort')[::-1], :]
 
         score = score_best_matches(matching_pairs, spec1, spec2, mz_power, int_power)
         return score
