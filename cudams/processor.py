@@ -25,6 +25,7 @@ from matchms.typing import SpectrumType
 from matchms.similarity.BaseSimilarity import BaseSimilarity
 from matchms.similarity import CosineGreedy
 from cudams.cosine import similarity
+from scipy import sparse
 
 class Config(BaseModel):
     tolerance: float
@@ -286,12 +287,129 @@ class CudaCosineGreedy(BaseSimilarity):
 
         return result_output, result_overflow
 
+
+
+    def _matrix_with_sparse_output(
+        self,
+        references: List[SpectrumType],
+        queries: List[SpectrumType],
+        threshold: float = .75,
+        is_symmetric: bool = False,
+    ) -> (np.ndarray, np.ndarray):
+        BATCH_SIZE = self.batch_size
+        dtype = self.score_datatype
+
+        batches_r = []
+        for bstart, bend in tqdm(
+            argbatch(references, BATCH_SIZE), desc="Batch all references"
+        ):
+            rbatch = references[bstart:bend]
+            rspec, rlen = spectra_peaks_to_tensor(rbatch, dtype=dtype)
+            batches_r.append([rspec, rlen, bstart, bend])
+
+        batches_q = []
+        for bstart, bend in tqdm(
+            argbatch(queries, BATCH_SIZE), desc="Batch all queries"
+        ):
+            qbatch = queries[bstart:bend]
+            qspec, qlen = spectra_peaks_to_tensor(qbatch, dtype=dtype)
+            batches_q.append([qspec, qlen, bstart, bend])
+
+        batches_rq = list(product(batches_r, batches_q))
+        
+        TOTAL_BATCHES = len(batches_rq)
+
+        R = math.ceil(len(references) / BATCH_SIZE) * BATCH_SIZE
+        Q = math.ceil(len(queries) / BATCH_SIZE) * BATCH_SIZE
+        
+        
+        batch_outputs = np.empty(shape=(TOTAL_BATCHES,4),dtype=object)
+        # result_output = np.empty((R, Q, 2), dtype="float32")
+        # result_overflow = np.empty((R, Q, 1), dtype="uint8")
+
+        # We loop over all batchs in sequence
+        for batch_i in tqdm(range(TOTAL_BATCHES)):
+            # Each batch has own CUDA stream so that the GPU is as busy as possible
+            
+            
+            out = np.empty(
+                shape=(BATCH_SIZE, BATCH_SIZE, 2),
+                dtype="float32",
+            )
+
+            overflow = np.empty(
+                shape=(BATCH_SIZE, BATCH_SIZE, 1),
+                dtype="uint8",
+            )
+
+            # We get our batch and lengths (lengths are different for different spectra)
+            (rspec, rlen, rstart, rend), (qspec, qlen, qstart, qend) = batches_rq[
+                batch_i
+            ]
+            lens = np.zeros((2, BATCH_SIZE), "int32")
+            lens[0, : len(rlen)] = rlen
+            lens[1, : len(qlen)] = qlen
+
+            # We make sure main resources remain on CPU RAM
+            with cuda.pinned(
+                rspec,
+                qspec,
+                lens,
+                out,
+                overflow,
+            ):
+                # We order empty space for results on GPU RAM
+                out_cu = cuda.device_array(
+                    (BATCH_SIZE, BATCH_SIZE, 2), dtype="float32"
+                )
+                overflow_cu = cuda.device_array(
+                    (BATCH_SIZE, BATCH_SIZE, 1), dtype="uint8"
+                )
+
+                # We order the stream to copy input data to GPU RAM
+                rspec_cu = cuda.to_device(rspec)
+                qspec_cu = cuda.to_device(qspec)
+                lens_cu = cuda.to_device(lens)
+
+                # We order the stream to execute kernel (this is scheduled, it will execute, but we can't force it)
+                self.kernel(
+                    rspec_cu, qspec_cu, lens_cu, out_cu, overflow_cu
+                )
+
+                # We order a data return
+                out_cu.copy_to_host(out)
+                overflow_cu.copy_to_host(overflow)
+
+                # result_output[rstart:rend, qstart:qend] = out
+                # result_overflow[rstart:rend, qstart:qend] = overflow
+                
+                # We wait for all streams to finish their work everywhere
+                cuda.synchronize()
+                mask = out[:len(rlen),:len(qlen),0] >= threshold
+                r, c = np.nonzero(mask)
+                out = out[r,c]
+                overflow = overflow[r,c]
+                r += rstart
+                c += qstart
+                batch_outputs[batch_i] = r, c, out, overflow
+        
+        rows = np.concatenate(batch_outputs[:,0],axis=0)
+        cols = np.concatenate(batch_outputs[:,1],axis=0)
+        out = np.concatenate(batch_outputs[:,2],axis=0)
+        overflows = np.concatenate(batch_outputs[:,3],axis=0)
+        
+        # result_num_matches = sparse.coo_matrix((result_score, (result_i, result_j)), shape=(R,Q))
+        # result_overflow = sparse.coo_matrix((result_overflow, (result_i, result_j)), shape=(R,Q))
+        
+        return rows, cols, out, overflows
+
     def matrix(
         self,
         references: List[SpectrumType],
         queries: List[SpectrumType],
         array_type: Literal["numpy", "sparse", "memmap"] = "numpy",
         is_symmetric: bool = False,
+        sparse_threshold: float = .75
     ) -> np.ndarray | CosineGreedyResults:
         """Provide optimized method to calculate an np.array of similarity scores
         for given reference and query spectrums.
@@ -308,12 +426,16 @@ class CudaCosineGreedy(BaseSimilarity):
             Set to True when *references* and *queries* are identical (as for instance for an all-vs-all
             comparison). By using the fact that score[i,j] = score[j,i] the calculation will be about
             2x faster.
+        threshold:
+            Useful when using `array_type=sparse` and very large number of spectra. All scores < threshold are set to 0
+            and the resulting large sparse score matrix is returned as a scipy.sparse matrix (both scores and overflows)
         """
         assert self.kernel is not None, "Kernel isn't compiled - use .compile() first"
         
         if array_type == "numpy":
             return self._matrix_with_numpy_output(references, queries, is_symmetric=is_symmetric)
-        
+        elif array_type == "sparse":
+            return self._matrix_with_sparse_output(references, queries, is_symmetric=is_symmetric, threshold=sparse_threshold)
         BATCH_SIZE = self.batch_size
         dtype = self.score_datatype
 
@@ -343,8 +465,8 @@ class CudaCosineGreedy(BaseSimilarity):
         R = math.ceil(len(references) / BATCH_SIZE) * BATCH_SIZE
         Q = math.ceil(len(queries) / BATCH_SIZE) * BATCH_SIZE
         
-        output_arr = np.empty((R, Q, 2), dtype="float32")
-
+        # output_arr = np.empty((R, Q, 2), dtype="float32")
+        result_score = sparse.dok_matrix()
         # We initialize a pool of 3 workers that will offload results to disk
         with ThreadPool(3) as pool:
             # We loop over all batchs in sequence
