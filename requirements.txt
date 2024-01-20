@@ -5,7 +5,6 @@ numba==0.57.0
 numpy==1.22.4
 pandas==1.5.3
 rdkit==2023.3.1
-# tensorflow==2.12.0
 tqdm==4.65.0
 pyyaml
 boto3

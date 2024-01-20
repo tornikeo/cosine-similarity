@@ -1,17 +1,16 @@
 import json
+import warnings
 from pathlib import Path
-from joblib import Parallel, delayed
+
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 from matchms import Spectrum
+from matchms.filtering import (add_losses, normalize_intensities,
+                               reduce_to_number_of_peaks,
+                               require_minimum_number_of_peaks, select_by_mz,
+                               select_by_relative_intensity)
 from tqdm import tqdm
-from matchms.filtering import normalize_intensities
-from matchms.filtering import require_minimum_number_of_peaks
-from matchms.filtering import select_by_mz
-from matchms.filtering import select_by_relative_intensity
-from matchms.filtering import reduce_to_number_of_peaks
-from matchms.filtering import add_losses
-import warnings
 
 
 def spectra_peaks_to_tensor(

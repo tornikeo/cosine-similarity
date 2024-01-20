@@ -1,31 +1,28 @@
-from pydantic import BaseModel, Field
-import warnings
-
-# from cudams import cosine, data, utils
-from cudams.utils import argbatch, mkdir
-from cudams.data import get_ref_spectra_from_df
-from cudams.kernel import compile
-from cudams.utils import name2idx
-import math
-from pathlib import Path
-import pandas as pd
-from tqdm import tqdm
-from cudams.data import spectra_peaks_to_tensor
-from numba import cuda
-from itertools import product
-from time import perf_counter
-from multiprocessing.pool import ThreadPool
-from multiprocessing import shared_memory
-import numpy as np
 import json
+import math
+import warnings
+from itertools import product
+from multiprocessing import shared_memory
+from multiprocessing.pool import ThreadPool
+from pathlib import Path
+from time import perf_counter
+from typing import List, Literal, Tuple
 
-from typing import Tuple, List, Literal
 import numpy as np
-from matchms.typing import SpectrumType
-from matchms.similarity.BaseSimilarity import BaseSimilarity
+import pandas as pd
 from matchms.similarity import CosineGreedy
-from cudams.cosine import similarity
+from matchms.similarity.BaseSimilarity import BaseSimilarity
+from matchms.typing import SpectrumType
+from numba import cuda
+from pydantic import BaseModel, Field
 from scipy import sparse
+from tqdm import tqdm
+
+from cudams.cosine import similarity
+from cudams.data import get_ref_spectra_from_df, spectra_peaks_to_tensor
+from cudams.kernel import compile
+from cudams.utils import argbatch, mkdir, name2idx
+
 
 class Config(BaseModel):
     tolerance: float

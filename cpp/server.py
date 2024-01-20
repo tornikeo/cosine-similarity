@@ -1,25 +1,21 @@
-from io import BytesIO
+import json
 import subprocess
+from io import BytesIO
+from pathlib import Path
+from typing import List, Tuple
 
-from fastapi import FastAPI, File, UploadFile
-from joblib import Parallel, delayed
-from tqdm import tqdm
-from typing import Tuple, List
-from matchms import Spectrum
-from matchms.typing import SpectrumType
 import numpy as np
 import pandas as pd
-from pathlib import Path
-import json
-
+from fastapi import FastAPI, File, UploadFile
+from joblib import Parallel, delayed
 from matchms import Spectrum
+from matchms.filtering import (add_losses, normalize_intensities,
+                               reduce_to_number_of_peaks,
+                               require_minimum_number_of_peaks, select_by_mz,
+                               select_by_relative_intensity)
+from matchms.typing import SpectrumType
+from tqdm import tqdm
 
-from matchms.filtering import normalize_intensities
-from matchms.filtering import require_minimum_number_of_peaks
-from matchms.filtering import select_by_mz
-from matchms.filtering import select_by_relative_intensity
-from matchms.filtering import reduce_to_number_of_peaks
-from matchms.filtering import add_losses
 
 def process_spectrum(spectrum):
     spectrum = select_by_mz(spectrum, mz_from=10.0, mz_to=1000.0)

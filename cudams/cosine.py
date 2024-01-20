@@ -1,6 +1,12 @@
 from typing import List, Tuple
+
 import numba
 import numpy as np
+from matchms.similarity import CosineGreedy as OriginalCosineGreedy
+from matchms.similarity.BaseSimilarity import BaseSimilarity
+from matchms.similarity.spectrum_similarity_functions import (
+    collect_peak_pairs, score_best_matches)
+from matchms.typing import SpectrumType
 
 
 @numba.njit
@@ -178,3 +184,4 @@ def similarity(
 
         score = score_best_matches(matching_pairs, spec1, spec2, mz_power, int_power)
         return score
+
