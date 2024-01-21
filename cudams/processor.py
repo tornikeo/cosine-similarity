@@ -153,7 +153,7 @@ def numpy_accumulator_worker(
 
 
 class CudaCosineGreedy(BaseSimilarity):
-    score_datatype = np.float64
+    score_datatype = np.float32
 
     def __init__(
         self,
@@ -284,8 +284,6 @@ class CudaCosineGreedy(BaseSimilarity):
 
         return result_output, result_overflow
 
-
-
     def _matrix_with_sparse_output(
         self,
         references: List[SpectrumType],
@@ -319,16 +317,15 @@ class CudaCosineGreedy(BaseSimilarity):
         R = math.ceil(len(references) / BATCH_SIZE) * BATCH_SIZE
         Q = math.ceil(len(queries) / BATCH_SIZE) * BATCH_SIZE
         
-        
         batch_outputs = np.empty(shape=(TOTAL_BATCHES,4),dtype=object)
+        streams = [cuda.stream() for _ in range(TOTAL_BATCHES)]
         # result_output = np.empty((R, Q, 2), dtype="float32")
         # result_overflow = np.empty((R, Q, 1), dtype="uint8")
 
         # We loop over all batchs in sequence
         for batch_i in tqdm(range(TOTAL_BATCHES)):
+            stream = streams[batch_i]
             # Each batch has own CUDA stream so that the GPU is as busy as possible
-            
-            
             out = np.empty(
                 shape=(BATCH_SIZE, BATCH_SIZE, 2),
                 dtype="float32",
@@ -357,48 +354,70 @@ class CudaCosineGreedy(BaseSimilarity):
             ):
                 # We order empty space for results on GPU RAM
                 out_cu = cuda.device_array(
-                    (BATCH_SIZE, BATCH_SIZE, 2), dtype="float32"
+                    (BATCH_SIZE, BATCH_SIZE, 2), dtype="float32",
+                    stream=stream
                 )
                 overflow_cu = cuda.device_array(
-                    (BATCH_SIZE, BATCH_SIZE, 1), dtype="uint8"
+                    (BATCH_SIZE, BATCH_SIZE, 1), dtype="uint8",
+                    stream=stream
                 )
 
                 # We order the stream to copy input data to GPU RAM
-                rspec_cu = cuda.to_device(rspec)
-                qspec_cu = cuda.to_device(qspec)
-                lens_cu = cuda.to_device(lens)
+                rspec_cu = cuda.to_device(rspec, stream=stream)
+                qspec_cu = cuda.to_device(qspec, stream=stream)
+                lens_cu = cuda.to_device(lens, stream=stream)
 
                 # We order the stream to execute kernel (this is scheduled, it will execute, but we can't force it)
                 self.kernel(
-                    rspec_cu, qspec_cu, lens_cu, out_cu, overflow_cu
+                    rspec_cu, qspec_cu, lens_cu, out_cu, overflow_cu,
+                    stream=stream
                 )
 
-                # We order a data return
-                out_cu.copy_to_host(out)
-                overflow_cu.copy_to_host(overflow)
 
                 # result_output[rstart:rend, qstart:qend] = out
                 # result_overflow[rstart:rend, qstart:qend] = overflow
-                
+                def end_of_stream_callback(
+                        stream, status, 
+                        rstart,
+                        rend,
+                        qstart,
+                        qend):
+                    
+                    # We order a data return
+                    
+                    out = out_cu.copy_to_host(stream=stream)
+                    overflow = overflow_cu.copy_to_host(stream=stream)
+                    lens = lens_cu.copy_to_host(stream=stream)
+                    
+                    mask = out[:len(rlen),:len(qlen),0] >= threshold
+                    # r, c = np.nonzero(mask)
+                    # out = out[r,c]
+                    # overflow = overflow[r,c]
+                    # r += rstart
+                    # c += qstart
+                    # batch_outputs[batch_i] = r, c, out, overflow
+
+                stream.add_callback(
+                    callback=end_of_stream_callback,
+                    arg=[
+                        rstart,
+                        rend,
+                        qstart,
+                        qend,
+                    ],
+                )
                 # We wait for all streams to finish their work everywhere
-                cuda.synchronize()
-                mask = out[:len(rlen),:len(qlen),0] >= threshold
-                r, c = np.nonzero(mask)
-                out = out[r,c]
-                overflow = overflow[r,c]
-                r += rstart
-                c += qstart
-                batch_outputs[batch_i] = r, c, out, overflow
+            cuda.synchronize()
         
-        rows = np.concatenate(batch_outputs[:,0],axis=0)
-        cols = np.concatenate(batch_outputs[:,1],axis=0)
-        out = np.concatenate(batch_outputs[:,2],axis=0)
-        overflows = np.concatenate(batch_outputs[:,3],axis=0)
+        # rows = np.concatenate(batch_outputs[:,0],axis=0)
+        # cols = np.concatenate(batch_outputs[:,1],axis=0)
+        # out = np.concatenate(batch_outputs[:,2],axis=0)
+        # overflows = np.concatenate(batch_outputs[:,3],axis=0)
         
         # result_num_matches = sparse.coo_matrix((result_score, (result_i, result_j)), shape=(R,Q))
         # result_overflow = sparse.coo_matrix((result_overflow, (result_i, result_j)), shape=(R,Q))
-        
-        return rows, cols, out, overflows
+        return None
+        # return rows, cols, out, overflows
 
     def matrix(
         self,

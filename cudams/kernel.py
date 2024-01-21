@@ -132,10 +132,10 @@ def compile(
 
             # Quite slow - Bubble sort (This should also be done in several threads)
             # We need two cases, bubble sort up to 50 elems is fine
-            score = types.float64(0.0)
+            score = types.float32(0.0)
             used_matches = types.int32(0)
             for _ in range(0, num_match):
-                max_prod = types.float64(-1.0)
+                max_prod = types.float32(-1.0)
                 # max_peak1_idx = types.int16(-1)
                 # max_peak2_idx = types.int16(-1)
 
