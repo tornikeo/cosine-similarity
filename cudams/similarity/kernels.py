@@ -1,10 +1,8 @@
 import math
-
 import numba
 from numba import cuda, types
 
-
-def compile(
+def compile_cuda_cosine_greedy_kernel(
     tolerance: float = 0.1,
     shift: float = 0,
     mz_power: float = 0.0,
