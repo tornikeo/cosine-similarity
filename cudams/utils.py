@@ -10,10 +10,11 @@ import os
 import json
 import warnings
 from pathlib import Path
-
+from typing import List, Literal, Tuple, Optional
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
+from itertools import product
 from matchms import Spectrum
 from matchms.filtering import (add_losses, normalize_intensities,
                                reduce_to_number_of_peaks,
@@ -64,6 +65,7 @@ def ignore_performance_warnings():
 
 def spectra_peaks_to_tensor(
     spectra: list, dtype: str = "float32", 
+    pad: int = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Working with GPU requires us to have a fixed shape for mz/int arrays.
@@ -75,14 +77,18 @@ def spectra_peaks_to_tensor(
         spectra: [2, len(spectra)] float32
         batch: [len(spectra)] int32
     """
-    sp_max_shape = max(len(s.peaks) for s in spectra)
+    if pad is None:
+        sp_max_shape = max(len(s.peaks) for s in spectra)
+    else:
+        sp_max_shape = pad
+        
     mz = np.empty((len(spectra), sp_max_shape), dtype=dtype)
     int = np.empty((len(spectra), sp_max_shape), dtype=dtype)
     batch = np.empty(len(spectra), dtype=np.int32)
     for i, s in enumerate(spectra):
         # .to_numpy creates an unneeded copy - we don't need to do that twice
         # spec_len = min(len(s.peaks), spectra_len_cutoff)
-        spec_len = len(s.peaks)
+        spec_len = min(len(s.peaks), sp_max_shape)
         mz[i, :spec_len] = s._peaks.mz[:spec_len]
         int[i, :spec_len] = s._peaks.intensities[:spec_len]
         batch[i] = spec_len
@@ -138,3 +144,80 @@ def get_ref_spectra_from_df(spectra_df,
     return spectra
 
 
+def get_spectra_batches(
+    reference_csv_file = 'data/input/example_dataset_tornike.csv',
+    query_csv_file = 'data/input/example_dataset_tornike.csv',
+    preprocess: Literal['minimal','full']='minimal',
+    max_peaks=1024,
+    batch_size = 512,
+    max_pairs = 512 ** 2,
+    padding=1024,
+    dtype='float32',
+    verbose=False,
+) -> (list,list,list):
+    """
+    Returns references, queries and batched inputs, ready to be used in a kernel.
+    """
+    reference_csv_file = Path(reference_csv_file)
+    query_csv_file = Path(query_csv_file)
+    
+    def process_spectrum_full(spectrum: np.ndarray) -> np.ndarray:
+        spectrum = select_by_mz(spectrum, mz_from=10.0, mz_to=1000.0)
+        spectrum = normalize_intensities(spectrum)
+        spectrum = select_by_relative_intensity(spectrum, intensity_from=0.001)
+        spectrum = reduce_to_number_of_peaks(spectrum, n_max=max_peaks)
+        spectrum = require_minimum_number_of_peaks(spectrum, n_required=5)
+        return spectrum
+    
+    def process_spectrum_minimal(spectrum: np.ndarray) -> np.ndarray:
+        spectrum = reduce_to_number_of_peaks(spectrum, n_max=max_pairs)
+        return spectrum
+
+    process_spectrum = \
+        process_spectrum_full if preprocess == 'full' else process_spectrum_minimal
+    
+    limit = None
+    if max_pairs is not None:
+        limit = int(max_pairs ** .5) * 2
+    
+    ref_spectra_df_path = Path(reference_csv_file)
+    ref_spectra_df = pd.read_csv(ref_spectra_df_path)
+    references = get_ref_spectra_from_df(ref_spectra_df, 
+                                         spectrum_processor=process_spectrum,
+                                         limit=limit)
+
+    if reference_csv_file == query_csv_file:
+        queries = references[:]
+    else:
+        query_spectra_df_path = Path(query_csv_file)
+        query_spectra_df = pd.read_csv(query_spectra_df_path)
+        queries = get_ref_spectra_from_df(query_spectra_df, 
+                                          spectrum_processor=process_spectrum,
+                                          limit=limit,
+                                          )
+    
+    if max_pairs is not None:
+        references = references[:int(max_pairs**.5)]
+        queries = queries[:int(max_pairs**.5)]
+            
+    batches_r = []
+    for bstart, bend in tqdm(
+        argbatch(references, batch_size), desc="Batch all references", 
+        disable=not verbose,
+    ):
+        rbatch = references[bstart:bend]
+        rspec, rlen = spectra_peaks_to_tensor(rbatch, dtype=dtype, pad=padding)
+        batches_r.append([rspec, rlen, bstart, bend])
+
+    batches_q = []
+    for bstart, bend in tqdm(
+        argbatch(queries, batch_size), desc="Batch all queries",
+        disable=not verbose,
+    ):
+        qbatch = queries[bstart:bend]
+        qspec, qlen = spectra_peaks_to_tensor(qbatch, dtype=dtype, pad=padding)
+        batches_q.append([qspec, qlen, bstart, bend])
+    
+    batches_inputs = list(product(batches_r, batches_q))
+    
+    return references, queries, batches_inputs

@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from scipy import sparse
 from tqdm import tqdm
 
-from .utils import get_ref_spectra_from_df, spectra_peaks_to_tensor, \
+from ..utils import get_ref_spectra_from_df, spectra_peaks_to_tensor, \
     argbatch, mkdir, name2idx
 from .kernels import compile_cuda_cosine_greedy_kernel
 
