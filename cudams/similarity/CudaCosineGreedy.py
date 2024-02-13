@@ -184,7 +184,9 @@ class CudaCosineGreedy(BaseSimilarity):
 
                 result[:, rstart:rend, qstart:qend] = out
         
-        dtype = np.dtype([('score', np.float32), ('matches', np.int32), ('overflow', np.uint8)])
+        dtype = np.dtype([('score', np.float32), 
+                          ('matches', np.int32),
+                          ('overflow', np.uint8)])
         result = np.rec.fromarrays(
             result[:, :len(references),:len(queries)], 
             dtype=dtype)

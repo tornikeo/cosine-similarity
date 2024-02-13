@@ -202,7 +202,7 @@ def compile_cuda_cosine_greedy_kernel(
 
             score = score / score_norm
             out[0, i, j] = score
-            out[1, i, j] = num_match
+            out[1, i, j] = used_matches
 
     def kernel(
         rspec_cu,
