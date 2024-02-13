@@ -31,33 +31,37 @@ def compile_cuda_cosine_greedy_kernel(
     """
     MATCH_LIMIT = match_limit
     R, Q = batch_size, batch_size
-    THREADS_PER_BLOCK = (32, 32)
+    # Since the first outer loop in acc step is iterating over references,
+    # It is faster to have a block that runs same reference, over multiple 
+    # queries, so that thread divergence is minimzed
+    THREADS_PER_BLOCK = (1, 512 + 256)
     BLOCKS_PER_GRID_X = math.ceil(R / THREADS_PER_BLOCK[0])
     BLOCKS_PER_GRID_Y = math.ceil(Q / THREADS_PER_BLOCK[1])
     BLOCKS_PER_GRID = (BLOCKS_PER_GRID_X, BLOCKS_PER_GRID_Y)
-
+    
     @cuda.jit
     def _kernel(
         rspec,
         qspec,
         lens,
         out,
-        overflow,
     ):
         i, j = cuda.grid(2)
-        thread_i = cuda.threadIdx.x
-        thread_j = cuda.threadIdx.y
-        block_size_x = cuda.blockDim.x
-        block_size_y = cuda.blockDim.y
+        # score_out = out[0]
+        # matches_out = out[1]
+        # overflow_out = out[2]
+        
+        # thread_i = cuda.threadIdx.x
+        # thread_j = cuda.threadIdx.y
+        # block_size_x = cuda.blockDim.x
+        # block_size_y = cuda.blockDim.y
 
-        # mem = cuda.shared.array((8, ))
         # We aren't out of the RxQ grid
         if i < R and j < Q:
             # Init values (we expect these to be uninitialized)
-            overflow[i, j, 0] = 0
-            out[i, j, 0] = 0
-            out[i, j, 1] = 0
-            # return;
+            out[0, i, j] = 0
+            out[1, i, j] = 0
+            out[2, i, j] = 0
 
             # mem = cuda.shared.array((4, 4, 4, 32), types.float32)
             rmz = rspec[0] # rspec shape is [2, 2048, 256], rmz shape is [2048, 256]
@@ -104,11 +108,13 @@ def compile_cuda_cosine_greedy_kernel(
                             matches[1, num_match] = peak2_idx
                             num_match += 1
                         else:
-                            overflow[i, j, 0] = 1  # This is the errorcode for overflow
+                            out[2, i, j] = 1  # This is the errorcode for overflow
                             break
+            ## Debug checkpoint
             # out[i, j, 0] = 1
             # out[i, j, 1] = num_match
             # return
+            
             if num_match == 0:
                 return
             
@@ -129,19 +135,19 @@ def compile_cuda_cosine_greedy_kernel(
                 ) ** 2
             score_norm = math.sqrt(score_norm_spec1 * score_norm_spec2)
             
-            ## debug checkpoint
+            # Debug checkpoint
             # out[i, j, 0] = score_norm
             # out[i, j, 1] = num_match
             # return
             
-            # Quite slow - Bubble sort (This should also be done in several threads)
+            # VERY slow - Bubble sort (This should also be done in several threads)
             # We need two cases, bubble sort up to 50 elems is fine
             score = types.float32(0.0)
-            used_matches = types.int32(0)
+            used_matches = types.int32(0.0)
             for _ in range(0, num_match):
                 max_prod = types.float32(-1.0)
-                # max_peak1_idx = types.int16(-1)
-                # max_peak2_idx = types.int16(-1)
+                max_peak1_idx = types.int32(-1)
+                max_peak2_idx = types.int32(-1)
 
                 for sj in range(0, num_match):
                     if matches[0, sj] != -1:
@@ -163,7 +169,7 @@ def compile_cuda_cosine_greedy_kernel(
                             max_peak1_idx = peak1_idx
                             max_peak2_idx = peak2_idx
                             
-                # debug checkpoint
+                # Debug checkpoint
                 # out[i, j, 0] = max_prod
                 # out[i, j, 1] = used_matches
                 # return
@@ -186,7 +192,6 @@ def compile_cuda_cosine_greedy_kernel(
             # out[i, j, 0] = score_norm
             # out[i, j, 1] = used_matches
             # return
-            
                 
             # out[i, j, 0] = matches[0, MATCH_LIMIT-1]
             # out[i, j, 1] = matches[1, MATCH_LIMIT-1]
@@ -196,16 +201,14 @@ def compile_cuda_cosine_greedy_kernel(
             # return
 
             score = score / score_norm
-
-            out[i, j, 0] = score
-            out[i, j, 1] = used_matches
+            out[0, i, j] = score
+            out[1, i, j] = num_match
 
     def kernel(
         rspec_cu,
         qspec_cu,
         lens_cu,
         out_cu,
-        overflow_cu,
         stream: cuda.stream = None,
     ):
         _kernel[BLOCKS_PER_GRID, THREADS_PER_BLOCK, stream](
@@ -213,7 +216,6 @@ def compile_cuda_cosine_greedy_kernel(
             qspec_cu,
             lens_cu,
             out_cu,
-            overflow_cu,
         )
 
     return kernel

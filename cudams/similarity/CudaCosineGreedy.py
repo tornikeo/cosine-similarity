@@ -80,7 +80,7 @@ class CudaCosineGreedy(BaseSimilarity):
         intensity_power: float = 1.0,
         shift: float = 0,
         batch_size: int = 1024,
-        match_limit: int = 256,
+        match_limit: int = 512,
     ):
         self.tolerance = tolerance
         self.mz_power = mz_power
@@ -89,13 +89,7 @@ class CudaCosineGreedy(BaseSimilarity):
         self.batch_size = batch_size
         self.match_limit = match_limit
 
-        self.kernel = None
-        self.results = None
-        if not cuda.is_available():
-            warnings.warn(f"{self.__class__}: CUDA device seems unavailable.")
-
-    def compile(self):
-        self.kernel = compile(
+        self.kernel = compile_cuda_cosine_greedy_kernel(
             tolerance=self.tolerance,
             shift=self.shift,
             mz_power=self.mz_power,
@@ -103,6 +97,8 @@ class CudaCosineGreedy(BaseSimilarity):
             match_limit=self.match_limit,
             batch_size=self.batch_size,
         )
+        if not cuda.is_available():
+            warnings.warn(f"{self.__class__}: CUDA device seems unavailable.")
 
     def __str__(self) -> str:
         return self.config.model_dump_json(indent=1)
@@ -112,7 +108,7 @@ class CudaCosineGreedy(BaseSimilarity):
         references: List[SpectrumType],
         queries: List[SpectrumType],
         is_symmetric: bool = False,
-    ) -> (np.ndarray, np.ndarray):
+    ) -> np.ndarray:
         BATCH_SIZE = self.batch_size
         dtype = self.score_datatype
 
@@ -139,21 +135,16 @@ class CudaCosineGreedy(BaseSimilarity):
         R = math.ceil(len(references) / BATCH_SIZE) * BATCH_SIZE
         Q = math.ceil(len(queries) / BATCH_SIZE) * BATCH_SIZE
         
-        result_output = np.empty((R, Q, 2), dtype="float32")
-        result_overflow = np.empty((R, Q, 1), dtype="uint8")
-
+        # result_output = np.empty((R, Q, 2), dtype="float32")
+        # result_overflow = np.empty((R, Q, 1), dtype="uint8")
+        result = np.empty([3, R, Q],'float32')
         # We loop over all batchs in sequence
         for batch_i in tqdm(range(TOTAL_BATCHES)):
             # Each batch has own CUDA stream so that the GPU is as busy as possible
 
             out = np.empty(
-                shape=(BATCH_SIZE, BATCH_SIZE, 2),
+                shape=(3, BATCH_SIZE, BATCH_SIZE),
                 dtype="float32",
-            )
-
-            overflow = np.empty(
-                shape=(BATCH_SIZE, BATCH_SIZE, 1),
-                dtype="uint8",
             )
 
             # We get our batch and lengths (lengths are different for different spectra)
@@ -161,8 +152,8 @@ class CudaCosineGreedy(BaseSimilarity):
                 batch_i
             ]
             lens = np.zeros((2, BATCH_SIZE), "int32")
-            lens[0, : len(rlen)] = rlen
-            lens[1, : len(qlen)] = qlen
+            lens[0, :len(rlen)] = rlen
+            lens[1, :len(qlen)] = qlen
 
             # We make sure main resources remain on CPU RAM
             with cuda.pinned(
@@ -170,37 +161,34 @@ class CudaCosineGreedy(BaseSimilarity):
                 qspec,
                 lens,
                 out,
-                overflow,
             ):
-                # We order empty space for results on GPU RAM
-                out_cu = cuda.device_array(
-                    (BATCH_SIZE, BATCH_SIZE, 2), dtype="float32"
-                )
-                overflow_cu = cuda.device_array(
-                    (BATCH_SIZE, BATCH_SIZE, 1), dtype="uint8"
-                )
 
                 # We order the stream to copy input data to GPU RAM
                 rspec_cu = cuda.to_device(rspec)
                 qspec_cu = cuda.to_device(qspec)
                 lens_cu = cuda.to_device(lens)
 
+                # We order empty space for results on GPU RAM
+                out_cu = cuda.device_array_like(out)
+                
                 # We order the stream to execute kernel (this is scheduled, it will execute, but we can't force it)
                 self.kernel(
-                    rspec_cu, qspec_cu, lens_cu, out_cu, overflow_cu
+                    rspec_cu, qspec_cu, lens_cu, out_cu,
                 )
 
                 # We order a data return
                 out_cu.copy_to_host(out)
-                overflow_cu.copy_to_host(overflow)
-
-                result_output[rstart:rend, qstart:qend] = out
-                result_overflow[rstart:rend, qstart:qend] = overflow
                 
                 # We wait for all streams to finish their work everywhere
                 cuda.synchronize()
 
-        return result_output, result_overflow
+                result[:, rstart:rend, qstart:qend] = out
+        
+        dtype = np.dtype([('score', np.float32), ('matches', np.int32), ('overflow', np.uint8)])
+        result = np.rec.fromarrays(
+            result[:, :len(references),:len(queries)], 
+            dtype=dtype)
+        return result
 
     def _matrix_with_sparse_output(
         self,
@@ -208,7 +196,7 @@ class CudaCosineGreedy(BaseSimilarity):
         queries: List[SpectrumType],
         threshold: float = .75,
         is_symmetric: bool = False,
-    ) -> (np.ndarray, np.ndarray):
+    ) -> np.ndarray:
         BATCH_SIZE = self.batch_size
         dtype = self.score_datatype
 

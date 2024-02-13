@@ -18,7 +18,6 @@ from pydantic import BaseModel, Field
 from scipy import sparse
 from tqdm import tqdm
 
-from cudams.cosine import similarity
 from cudams.data import get_ref_spectra_from_df, spectra_peaks_to_tensor
 from cudams.kernel import compile
 from cudams.utils import argbatch, mkdir, name2idx
