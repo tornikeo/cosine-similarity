@@ -81,6 +81,7 @@ class CudaCosineGreedy(BaseSimilarity):
         shift: float = 0,
         batch_size: int = 1024,
         match_limit: int = 512,
+        verbose=False,
     ):
         self.tolerance = tolerance
         self.mz_power = mz_power
@@ -88,6 +89,7 @@ class CudaCosineGreedy(BaseSimilarity):
         self.shift = shift
         self.batch_size = batch_size
         self.match_limit = match_limit
+        self.verbose = verbose
 
         self.kernel = compile_cuda_cosine_greedy_kernel(
             tolerance=self.tolerance,
@@ -113,17 +115,13 @@ class CudaCosineGreedy(BaseSimilarity):
         dtype = self.score_datatype
 
         batches_r = []
-        for bstart, bend in tqdm(
-            argbatch(references, BATCH_SIZE), desc="Batch all references"
-        ):
+        for bstart, bend in argbatch(references, BATCH_SIZE):
             rbatch = references[bstart:bend]
             rspec, rlen = spectra_peaks_to_tensor(rbatch, dtype=dtype)
             batches_r.append([rspec, rlen, bstart, bend])
 
         batches_q = []
-        for bstart, bend in tqdm(
-            argbatch(queries, BATCH_SIZE), desc="Batch all queries"
-        ):
+        for bstart, bend in argbatch(queries, BATCH_SIZE):
             qbatch = queries[bstart:bend]
             qspec, qlen = spectra_peaks_to_tensor(qbatch, dtype=dtype)
             batches_q.append([qspec, qlen, bstart, bend])
@@ -139,7 +137,7 @@ class CudaCosineGreedy(BaseSimilarity):
         # result_overflow = np.empty((R, Q, 1), dtype="uint8")
         result = np.empty([3, R, Q],'float32')
         # We loop over all batchs in sequence
-        for batch_i in tqdm(range(TOTAL_BATCHES)):
+        for batch_i in tqdm(range(TOTAL_BATCHES), disable=not self.verbose):
             # Each batch has own CUDA stream so that the GPU is as busy as possible
 
             out = np.empty(

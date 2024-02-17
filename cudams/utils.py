@@ -151,12 +151,13 @@ def get_spectra_batches(
     max_peaks=1024,
     batch_size = 512,
     max_pairs = 512 ** 2,
-    padding=1024,
+    padding=None,
     dtype='float32',
     verbose=False,
-) -> (list,list,list):
+) -> [list, list, list]:
     """
     Returns references, queries and batched inputs, ready to be used in a kernel.
+    
     """
     reference_csv_file = Path(reference_csv_file)
     query_csv_file = Path(query_csv_file)

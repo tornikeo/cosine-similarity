@@ -6,7 +6,7 @@ from setuptools import find_packages, setup
 here = os.path.abspath(os.path.dirname(__file__))
 
 version = {}
-with open(os.path.join(here, "ms2deepscore", "__version__.py")) as f:
+with open(os.path.join(here, "cudams", "__version__.py")) as f:
     exec(f.read(), version)
 
 with open("README.md") as readme_file:
@@ -25,7 +25,7 @@ setup(
     include_package_data=True,
     license="Apache Software License 2.0",
     zip_safe=False,
-    # test_suite="tests",
+    test_suite="tests",
     python_requires='>=3.8',
     install_requires=[
         "matchms>=0.23.1",
