@@ -1,8 +1,6 @@
 import numpy as np
 import pytest
 from cudams.similarity import CudaCosineGreedy
-# from cudams.similarity import CosineGreedy
-from matchms.similarity import CosineGreedy
 from ..builder_Spectrum import SpectrumBuilder
 
 def compute_expected_score(mz_power, intensity_power, spectrum_1, spectrum_2, matches):
@@ -50,7 +48,7 @@ def test_cosine_greedy_pair(peaks, tolerance, mz_power, intensity_power, expecte
     spectrum_1 = builder.with_mz(peaks[0][0]).with_intensities(peaks[0][1]).build()
     spectrum_2 = builder.with_mz(peaks[1][0]).with_intensities(peaks[1][1]).build()
 
-    cosine_greedy = CosineGreedy(tolerance=tolerance, mz_power=mz_power, intensity_power=intensity_power)
+    cosine_greedy = CudaCosineGreedy(batch_size=8, tolerance=tolerance, mz_power=mz_power, intensity_power=intensity_power)
     score = cosine_greedy.pair(spectrum_1, spectrum_2)
 
     expected_score = compute_expected_score(mz_power, intensity_power, spectrum_1, spectrum_2, expected_matches)
@@ -69,7 +67,7 @@ def test_cosine_greedy_matrix(symmetric):
         np.array([0.5, 0.2, 1.0], dtype="float")).build()
 
     spectrums = [spectrum_1, spectrum_2]
-    cosine_greedy = CosineGreedy()
+    cosine_greedy = CudaCosineGreedy(batch_size=8)
     scores = cosine_greedy.matrix(spectrums, spectrums, is_symmetric=symmetric)
 
     assert scores[0][0][0] == pytest.approx(scores[1][1][0], 0.000001), "Expected different cosine score."
