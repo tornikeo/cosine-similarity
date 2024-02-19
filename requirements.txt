@@ -1,5 +1,5 @@
 matchms>=0.24.0
-rdkit==2023.3.1
+rdkit
 h5py
 matplotlib
 numpy
