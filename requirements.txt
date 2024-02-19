@@ -1,10 +1,10 @@
-h5py>=3.8.0
 matchms>=0.24.0
-matplotlib==3.7.1
-numba>=0.57.0
-numpy
-pandas==1.5.3
 rdkit==2023.3.1
+h5py
+matplotlib
+numpy
+pandas
+numba
 tqdm
 pyyaml
 boto3
