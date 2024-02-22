@@ -1,6 +1,6 @@
 import pytest, warnings
 
-@pytest.fixture(autouse=True, scope='module')
+@pytest.fixture(autouse=True, scope='session')
 def use_cudasim_if_cuda_unavailable():
     import os, numba
     
