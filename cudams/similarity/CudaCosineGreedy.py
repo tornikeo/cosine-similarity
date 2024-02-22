@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from matchms.similarity import CosineGreedy
 from matchms.similarity.BaseSimilarity import BaseSimilarity
-from matchms.typing import SpectrumType
+from matchms import Spectrum
 from numba import cuda
 from pydantic import BaseModel, Field
 from scipy import sparse
@@ -107,8 +107,8 @@ class CudaCosineGreedy(BaseSimilarity):
 
     def _matrix_with_numpy_output(
         self,
-        references: List[SpectrumType],
-        queries: List[SpectrumType],
+        references: List[Spectrum],
+        queries: List[Spectrum],
         is_symmetric: bool = False,
     ) -> np.ndarray:
         BATCH_SIZE = self.batch_size
@@ -192,8 +192,8 @@ class CudaCosineGreedy(BaseSimilarity):
 
     def _matrix_with_sparse_output(
         self,
-        references: List[SpectrumType],
-        queries: List[SpectrumType],
+        references: List[Spectrum],
+        queries: List[Spectrum],
         threshold: float = .75,
         is_symmetric: bool = False,
     ) -> np.ndarray:
@@ -327,8 +327,8 @@ class CudaCosineGreedy(BaseSimilarity):
 
     def matrix(
         self,
-        references: List[SpectrumType],
-        queries: List[SpectrumType],
+        references: List[Spectrum],
+        queries: List[Spectrum],
         array_type: Literal["numpy", "sparse", "memmap"] = "numpy",
         is_symmetric: bool = False,
         sparse_threshold: float = .75
@@ -358,137 +358,3 @@ class CudaCosineGreedy(BaseSimilarity):
             return self._matrix_with_numpy_output(references, queries, is_symmetric=is_symmetric)
         elif array_type == "sparse":
             return self._matrix_with_sparse_output(references, queries, is_symmetric=is_symmetric, threshold=sparse_threshold)
-        BATCH_SIZE = self.batch_size
-        dtype = self.score_datatype
-
-        batches_r = []
-        for bstart, bend in tqdm(
-            argbatch(references, BATCH_SIZE), desc="Batch all references"
-        ):
-            rbatch = references[bstart:bend]
-            rspec, rlen = spectra_peaks_to_tensor(rbatch, dtype=dtype)
-            batches_r.append([rspec, rlen, bstart, bend])
-
-        batches_q = []
-        for bstart, bend in tqdm(
-            argbatch(queries, BATCH_SIZE), desc="Batch all queries"
-        ):
-            qbatch = queries[bstart:bend]
-            qspec, qlen = spectra_peaks_to_tensor(qbatch, dtype=dtype)
-            batches_q.append([qspec, qlen, bstart, bend])
-
-        batches_rq = list(product(batches_r, batches_q))
-        streams = [cuda.stream() for _ in range(len(batches_rq))]
-
-        TOTAL_BATCHES = len(batches_rq)
-
-        output_dir = mkdir(self.output_dir, clean=True)
-
-        R = math.ceil(len(references) / BATCH_SIZE) * BATCH_SIZE
-        Q = math.ceil(len(queries) / BATCH_SIZE) * BATCH_SIZE
-        
-        # output_arr = np.empty((R, Q, 2), dtype="float32")
-        result_score = sparse.dok_matrix()
-        # We initialize a pool of 3 workers that will offload results to disk
-        with ThreadPool(3) as pool:
-            # We loop over all batchs in sequence
-            for batch_i in tqdm(range(TOTAL_BATCHES)):
-                # Each batch has own CUDA stream so that the GPU is as busy as possible
-                stream = streams[batch_i]
-
-                # Shared memory allows pool workers to read array without copying it
-                out_shm = shared_memory.SharedMemory(
-                    create=True, size=(BATCH_SIZE * BATCH_SIZE * 2 * 4)
-                )
-                out = np.ndarray(
-                    shape=(BATCH_SIZE, BATCH_SIZE, 2),
-                    dtype="float32",
-                    buffer=out_shm.buf,
-                )
-
-                overflow_shm = shared_memory.SharedMemory(
-                    create=True, size=(BATCH_SIZE * BATCH_SIZE * 1 * 1)
-                )
-                overflow = np.ndarray(
-                    shape=(BATCH_SIZE, BATCH_SIZE, 1),
-                    dtype="uint8",
-                    buffer=overflow_shm.buf,
-                )
-
-                # We get our batch and lengths (lengths are different for different spectra)
-                (rspec, rlen, rstart, rend), (qspec, qlen, qstart, qend) = batches_rq[
-                    batch_i
-                ]
-                lens = np.zeros((2, BATCH_SIZE), "int32")
-                lens[0, : len(rlen)] = rlen
-                lens[1, : len(qlen)] = qlen
-
-                # We make sure main resources remain on CPU RAM
-                with cuda.pinned(
-                    rspec,
-                    qspec,
-                    lens,
-                    out,
-                    overflow,
-                ):
-                    # We order empty space for results on GPU RAM
-                    out_cu = cuda.device_array(
-                        (BATCH_SIZE, BATCH_SIZE, 2), dtype="float32", stream=stream
-                    )
-                    overflow_cu = cuda.device_array(
-                        (BATCH_SIZE, BATCH_SIZE, 1), dtype="uint8", stream=stream
-                    )
-
-                    # We order the stream to copy input data to GPU RAM
-                    rspec_cu = cuda.to_device(rspec, stream=stream)
-                    qspec_cu = cuda.to_device(qspec, stream=stream)
-                    lens_cu = cuda.to_device(lens, stream=stream)
-
-                    # We order the stream to execute kernel (this is scheduled, it will execute, but we can't force it)
-                    self.kernel(
-                        rspec_cu, qspec_cu, lens_cu, out_cu, overflow_cu, stream=stream
-                    )
-
-                    # We order a data return
-                    out_cu.copy_to_host(out, stream=stream)
-                    overflow_cu.copy_to_host(overflow, stream=stream)
-
-                    # We create a function that will execute when this stream is done working
-                    # It is important to be quick here - so main work of writing to disk
-                    # Is handled by pool workers, not callback stream.
-                    def end_of_stream_callback(stream, status, args):
-                        pool.apply_async(
-                            file_saver_worker,
-                            args=args,
-                            error_callback=lambda e: print("Thread error", e),
-                        )
-
-                    stream.add_callback(
-                        callback=end_of_stream_callback,
-                        arg=[
-                            output_dir,
-                            BATCH_SIZE,
-                            out_shm.name,
-                            overflow_shm.name,
-                            rstart,
-                            rend,
-                            qstart,
-                            qend,
-                        ],
-                    )
-        pool.join()
-        # We wait for all streams to finish their work everywhere
-        cuda.synchronize()
-
-        files = sorted(list(output_dir.glob("*.npy")))
-        print(files)
-        print(len(files), len(batches_rq))
-        assert len(batches_rq) * 2 == len(files), "Some files are missing."
-
-        # self._results = CosineGreedyResults(
-        #     config=self.config,
-        #     files=sorted(files),
-        #     len_queries=len(queries),
-        #     len_references=len(references),
-        # )
-        # return self._results

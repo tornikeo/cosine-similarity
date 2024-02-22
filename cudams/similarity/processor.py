@@ -46,16 +46,6 @@ class CudaCosineGreedy(BaseSimilarity):
         if not cuda.is_available():
             warnings.warn(f"{self.__class__}: CUDA device seems unavailable.")
 
-    def compile(self):
-        self.kernel = compile(
-            tolerance=self.tolerance,
-            shift=self.shift,
-            mz_power=self.mz_power,
-            int_power=self.int_power,
-            match_limit=self.match_limit,
-            batch_size=self.batch_size,
-        )
-
     def __str__(self) -> str:
         return self.config.model_dump_json(indent=1)
 
