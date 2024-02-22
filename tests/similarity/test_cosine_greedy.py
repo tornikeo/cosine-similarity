@@ -15,7 +15,6 @@ def compute_expected_score(mz_power, intensity_power, spectrum_1, spectrum_2, ma
     expected_score = multiply_matching_intensities.sum() / denominator
     return expected_score
 
-
 @pytest.mark.parametrize("peaks, tolerance, mz_power, intensity_power, expected_matches", [
     [
         [
