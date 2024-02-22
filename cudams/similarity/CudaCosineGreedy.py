@@ -268,12 +268,8 @@ class CudaCosineGreedy(BaseSimilarity):
         # return rows, cols, out, overflows
 
     def pair(self, reference: Spectrum, query: Spectrum) -> float:
-        
         result_mat = self.matrix([reference], [query])
-        # mat of shape [3, 1, 1], 
-        # 3 for [score, matches, overflow]
         return np.asarray(result_mat.squeeze(), dtype=self.score_datatype)
-    
     
     def matrix(
         self,
