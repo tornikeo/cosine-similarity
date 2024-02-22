@@ -11,7 +11,7 @@ import numpy as np
 def test_tutorial_pesticide():
     assert cuda.is_available()
 
-    file = list(load_from_mgf('data/pesticides.mgf'))
+    file = list(load_from_mgf('tests/data/pesticides.mgf'))
     # Apply filters to clean and enhance each spectrum
     spectrums = []
 
