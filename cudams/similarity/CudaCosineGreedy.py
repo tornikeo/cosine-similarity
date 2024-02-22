@@ -17,11 +17,8 @@ from scipy import sparse
 from tqdm import tqdm
 
 from ..utils import get_ref_spectra_from_df, spectra_peaks_to_tensor, \
-    argbatch, mkdir, name2idx, cuda_pinned
+    argbatch, mkdir, name2idx
 from .kernels import compile_cuda_cosine_greedy_kernel
-
-# Patch cuda.pinned before https://github.com/numba/numba/pull/9458 gets merged
-cuda.pinned = cuda_pinned
 
 class CudaCosineGreedy(BaseSimilarity):
     score_datatype = [("score", np.float32), ("matches", "int"), ("overflow", "uint8")]

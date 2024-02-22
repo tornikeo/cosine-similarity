@@ -223,14 +223,3 @@ def get_spectra_batches(
     batches_inputs = list(product(batches_r, batches_q))
     
     return references, queries, batches_inputs
-
-@contextmanager
-def cuda_pinned(*arylist):
-    from numba import cuda
-    if os.getenv('NUMBA_ENABLE_CUDASIM') == '1':
-        # Fixes this issue https://github.com/numba/numba/pull/9458
-        with cuda.pinned():
-            yield
-    else:
-        with cuda.pinned(*arylist):
-            yield
