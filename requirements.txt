@@ -14,3 +14,4 @@ joblib
 pytest
 pytest-notebook
 ipykernel
+pydantic
