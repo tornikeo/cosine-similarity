@@ -15,4 +15,3 @@ pytest-notebook
 ipykernel
 pydantic
 requests
-cupy
