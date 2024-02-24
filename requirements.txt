@@ -1,10 +1,9 @@
 matchms>=0.24.0
 rdkit
+numba
 h5py
 matplotlib
-numpy
 pandas
-numba
 tqdm
 pyyaml
 boto3

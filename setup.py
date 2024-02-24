@@ -28,18 +28,13 @@ setup(
     test_suite="tests",
     python_requires='>=3.8',
     install_requires=[
-        "matchms>=0.23.1",
+        "matchms>=0.24.0",
+        "rdkit",
+        "h5py",
+        "pydantic",
         "numba",
-        "numpy>=1.20.3",
         "pandas",
         "joblib",
         "tqdm",
     ],
-    extras_require={"train": ["rdkit"],
-                    "dev": ["bump2version",
-                            "isort>=4.2.5,<5",
-                            "pytest",
-                            "pytest-cov",
-                            "yapf",],
-                    }
 )
