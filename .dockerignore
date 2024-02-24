@@ -1,0 +1,6 @@
+data/
+.ipynb_checkpoints/
+notebooks/
+.pytest_cache/
+.vscode/
+assets/

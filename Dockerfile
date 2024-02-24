@@ -1,6 +1,5 @@
-FROM tensorflow/tensorflow:2.11.0-gpu-jupyter
+FROM nvidia/cuda:12.3.1-devel-ubuntu20.04
 RUN apt-get update && apt-get install -y --no-install-recommends git 
-WORKDIR /tf
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY . .
