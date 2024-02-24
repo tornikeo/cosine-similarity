@@ -37,5 +37,6 @@ setup(
         "joblib",
         "tqdm",
         "requests",
+        "cupy",
     ],
 )
