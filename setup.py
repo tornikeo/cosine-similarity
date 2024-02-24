@@ -36,5 +36,6 @@ setup(
         "pandas",
         "joblib",
         "tqdm",
+        "requests",
     ],
 )
