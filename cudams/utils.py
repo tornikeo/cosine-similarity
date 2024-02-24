@@ -245,3 +245,42 @@ def download_cosine_10k_sample(path: Path) -> Path:
     shutil.move(tmp_path, path)
     
     return path
+
+
+def download_cosine_10k_sample(path: Path) -> Path:
+    path = Path(path)
+    url = 'https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/spectra_10k.csv'
+    
+    # Ensure path ends with .csv
+    if not path.suffix == '.csv':
+        raise ValueError("Path should end with .csv")
+    
+    # Download the file to a temporary location
+    tmp_path = path.with_suffix('.tmp')
+    with requests.get(url, stream=True) as response:
+        with open(tmp_path, 'wb') as tmp_file:
+            shutil.copyfileobj(response.raw, tmp_file)
+    
+    # Move the temporary file to the desired location
+    shutil.move(tmp_path, path)
+    
+    return path
+
+def download_cosine_100k_sample(path: Path) -> Path:
+    path = Path(path)
+    url = 'https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/spectra_100k.csv'
+    
+    # Ensure path ends with .csv
+    if not path.suffix == '.csv':
+        raise ValueError("Path should end with .csv")
+    
+    # Download the file to a temporary location
+    tmp_path = path.with_suffix('.tmp')
+    with requests.get(url, stream=True) as response:
+        with open(tmp_path, 'wb') as tmp_file:
+            shutil.copyfileobj(response.raw, tmp_file)
+    
+    # Move the temporary file to the desired location
+    shutil.move(tmp_path, path)
+    
+    return path
