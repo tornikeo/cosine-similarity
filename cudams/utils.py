@@ -228,6 +228,7 @@ def get_spectra_batches(
     return references, queries, batches_inputs
 
 def download_cosine_10k_sample(path: Path) -> Path:
+    path = Path(path)
     url = 'https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/test_set_cosine.csv'
     
     # Ensure path ends with .csv
