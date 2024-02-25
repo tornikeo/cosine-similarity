@@ -175,7 +175,7 @@ def get_spectra_batches(
         return spectrum
     
     def process_spectrum_minimal(spectrum: np.ndarray) -> np.ndarray:
-        spectrum = reduce_to_number_of_peaks(spectrum, n_max=max_pairs)
+        spectrum = reduce_to_number_of_peaks(spectrum, n_max=max_peaks)
         return spectrum
 
     process_spectrum = \
