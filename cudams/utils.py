@@ -282,7 +282,10 @@ def download_cosine_100k_sample(path: str = None) -> Path:
 def download(
         name: Literal['GNPS-LIBRARY.mgf']
     ) -> str:
+    known_hash = {
+        'GNPS-LIBRARY.mgf': '235f7518536e4b04a4fd11def3d60cffada2760ceee8e96ca356d873dbb2b440'
+    }
     return pooch.retrieve(
         url=f"https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/{name}",
-        known_hash=None
+        known_hash=known_hash.get(name)
     )
