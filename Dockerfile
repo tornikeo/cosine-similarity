@@ -1,5 +1,7 @@
-FROM nvidia/cuda:12.3.1-devel-ubuntu20.04
+FROM pytorch/pytorch:2.2.1-cuda12.1-cudnn8-devel 
 RUN apt-get update && apt-get install -y --no-install-recommends git 
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+WORKDIR /workdir
 COPY . .
+RUN pip install -e .
+RUN pip install -r requirements.txt

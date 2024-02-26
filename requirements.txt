@@ -1,4 +1,5 @@
 matchms>=0.24.0
+torch
 rdkit
 numba
 h5py

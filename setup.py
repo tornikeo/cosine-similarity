@@ -29,6 +29,7 @@ setup(
     python_requires='>=3.8',
     install_requires=[
         "matchms>=0.24.0",
+        "torch",
         "rdkit",
         "h5py",
         "pydantic",
