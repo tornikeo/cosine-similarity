@@ -25,6 +25,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import requests
 import shutil
+import pooch
 
 def batches(lst, batch_size) -> list:
     """
@@ -277,3 +278,10 @@ def download_cosine_100k_sample(path: str = None) -> Path:
     shutil.move(tmp_path, path)
     
     return path
+
+def download(
+        name: Literal['GNPS-LIBRARY.mgf']
+    ) -> str:
+    return pooch.retrieve(
+        url=f"https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/{name}",
+    )
