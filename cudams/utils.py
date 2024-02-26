@@ -284,4 +284,5 @@ def download(
     ) -> str:
     return pooch.retrieve(
         url=f"https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/{name}",
+        known_hash=None
     )
