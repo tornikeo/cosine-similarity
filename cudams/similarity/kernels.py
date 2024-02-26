@@ -9,6 +9,7 @@ def compile_cuda_cosine_greedy_kernel(
     int_power: float = 1.0,
     match_limit: int = 128,
     batch_size: int = 4096,
+    is_symmetric: bool = False
 ) -> callable:
     """
     JIT compiles the kernel for CUDA device, and bakes in constants (tolerance, shift, etc.)
@@ -29,6 +30,10 @@ def compile_cuda_cosine_greedy_kernel(
     This callable will run JIT-ed cuda kernel. All arguments must already reside in GPU memory.
     First-time use will cause the kernel "warm-up", so subsequent runs will be much faster.
     """
+    if is_symmetric:
+        import warnings
+        warnings.warn("no effect from is_symmetric, it is not yet implemented")
+        
     MATCH_LIMIT = match_limit
     R, Q = batch_size, batch_size
     # Since the first outer loop in acc step is iterating over references,

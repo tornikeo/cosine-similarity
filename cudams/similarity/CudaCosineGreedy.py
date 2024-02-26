@@ -21,7 +21,7 @@ from ..utils import get_ref_spectra_from_df, spectra_peaks_to_tensor, \
 from .kernels import compile_cuda_cosine_greedy_kernel
 
 class CudaCosineGreedy(BaseSimilarity):
-    score_datatype = [("score", np.float32), ("matches", "int"), ("overflow", "uint8")]
+    score_datatype = [("score", np.float32), ("matches", np.int32), ("overflow", np.uint8)]
 
     def __init__(
         self,

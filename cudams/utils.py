@@ -158,7 +158,7 @@ def get_spectra_batches(
     padding=None,
     dtype='float32',
     verbose=False,
-) -> [list, list, list]:
+) -> Tuple[list[Spectrum], list[Spectrum], list[np.ndarray]]:
     """
     Returns references, queries and batched inputs, ready to be used in a kernel.
     
@@ -227,14 +227,11 @@ def get_spectra_batches(
     
     return references, queries, batches_inputs
 
-def download_cosine_10k_sample(path: Path) -> Path:
+def download_pesticide_sample(path: Path = None) -> Path:
+    url = 'https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/pesticides.mgf'
+    if path is None:
+        path = url.split('/')[-1]
     path = Path(path)
-    url = 'https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/test_set_cosine.csv'
-    
-    # Ensure path ends with .csv
-    if not path.suffix == '.csv':
-        raise ValueError("Path should end with .csv")
-    
     # Download the file to a temporary location
     tmp_path = path.with_suffix('.tmp')
     with requests.get(url, stream=True) as response:
@@ -247,14 +244,12 @@ def download_cosine_10k_sample(path: Path) -> Path:
     return path
 
 
-def download_cosine_10k_sample(path: Path) -> Path:
-    path = Path(path)
+def download_cosine_10k_sample(path: str = None) -> Path:
     url = 'https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/spectra_10k.csv'
-    
-    # Ensure path ends with .csv
-    if not path.suffix == '.csv':
-        raise ValueError("Path should end with .csv")
-    
+    if path is None:
+        path = url.split('/')[-1]
+    path = Path(path)
+        
     # Download the file to a temporary location
     tmp_path = path.with_suffix('.tmp')
     with requests.get(url, stream=True) as response:
@@ -266,13 +261,11 @@ def download_cosine_10k_sample(path: Path) -> Path:
     
     return path
 
-def download_cosine_100k_sample(path: Path) -> Path:
-    path = Path(path)
+def download_cosine_100k_sample(path: str = None) -> Path:
     url = 'https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/spectra_100k.csv'
-    
-    # Ensure path ends with .csv
-    if not path.suffix == '.csv':
-        raise ValueError("Path should end with .csv")
+    if path is None:
+        path = url.split('/')[-1]
+    path = Path(path)
     
     # Download the file to a temporary location
     tmp_path = path.with_suffix('.tmp')
