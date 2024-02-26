@@ -1,4 +1,9 @@
+<a target="_blank" href="https://colab.research.google.com/github/tornikeo/cosine-similarity/blob/dev/notebooks/samples/colab_tutorial_pesticide.ipynb">
+  <img alt="Static Badge" src="https://img.shields.io/badge/Quickstart-Open-blue?logo=googlecolab">
+</a>
+
 # CudaMS
+
 
 CUDA-accelerated mass-spectrum similarity kernels
 
