@@ -1,9 +1,8 @@
-<a target="_blank" href="https://colab.research.google.com/github/tornikeo/cosine-similarity/blob/dev/notebooks/samples/colab_tutorial_pesticide.ipynb">
-  <img alt="Static Badge" src="https://img.shields.io/badge/Quickstart-Open-blue?logo=googlecolab">
+<a target="_blank" href="https://colab.research.google.com/github/tornikeo/cosine-similarity/blob/main/notebooks/samples/colab_tutorial_pesticide.ipynb">
+  <img alt="Static Badge" src="https://img.shields.io/badge/colab-quickstart-blue?logo=googlecolab">
 </a>
 
 # CudaMS
-
 
 CUDA-accelerated mass-spectrum similarity kernels
 
@@ -12,7 +11,8 @@ Current functions:
 
 # How to use
 
-The easiest way to get started is to use a colab notebook that has everything ready for you.
+The **easiest way** to get started is to use the <a target="_blank" href="https://colab.research.google.com/github/tornikeo/cosine-similarity/blob/main/notebooks/samples/colab_tutorial_pesticide.ipynb">colab notebook
+</a>  that has everything ready for you. Alternatively do any of the following:
 
 ## Run on Colab
 
@@ -21,5 +21,8 @@ The easiest way to get started is to use a colab notebook that has everything re
 ## Install locally
 
 ## Run in docker
+
+## Run on vast.ai
+
 
 
