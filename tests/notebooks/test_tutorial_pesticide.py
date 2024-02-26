@@ -7,11 +7,14 @@ from cudams.similarity import CudaCosineGreedy
 from numba import cuda
 from matchms.filtering import reduce_to_number_of_peaks
 import numpy as np
+from cudams.utils import download_pesticide_sample
+from pathlib import Path
 
-def test_tutorial_pesticide():
+def test_tutorial_pesticide(tmp_path: Path):
     assert cuda.is_available()
-
-    file = list(load_from_mgf('tests/data/pesticides.mgf'))
+    pest_file = str(download_pesticide_sample(tmp_path / 'pesticide.mgf'))
+    
+    file = list(load_from_mgf(pest_file))
     # Apply filters to clean and enhance each spectrum
     spectrums = []
 
