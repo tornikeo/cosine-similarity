@@ -228,64 +228,22 @@ def get_spectra_batches(
     
     return references, queries, batches_inputs
 
-def download_pesticide_sample(path: Path = None) -> Path:
-    url = 'https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/pesticides.mgf'
-    if path is None:
-        path = url.split('/')[-1]
-    path = Path(path)
-    # Download the file to a temporary location
-    tmp_path = path.with_suffix('.tmp')
-    with requests.get(url, stream=True) as response:
-        with open(tmp_path, 'wb') as tmp_file:
-            shutil.copyfileobj(response.raw, tmp_file)
-    
-    # Move the temporary file to the desired location
-    shutil.move(tmp_path, path)
-    
-    return path
-
-
-def download_cosine_10k_sample(path: str = None) -> Path:
-    url = 'https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/spectra_10k.csv'
-    if path is None:
-        path = url.split('/')[-1]
-    path = Path(path)
-        
-    # Download the file to a temporary location
-    tmp_path = path.with_suffix('.tmp')
-    with requests.get(url, stream=True) as response:
-        with open(tmp_path, 'wb') as tmp_file:
-            shutil.copyfileobj(response.raw, tmp_file)
-    
-    # Move the temporary file to the desired location
-    shutil.move(tmp_path, path)
-    
-    return path
-
-def download_cosine_100k_sample(path: str = None) -> Path:
-    url = 'https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/spectra_100k.csv'
-    if path is None:
-        path = url.split('/')[-1]
-    path = Path(path)
-    
-    # Download the file to a temporary location
-    tmp_path = path.with_suffix('.tmp')
-    with requests.get(url, stream=True) as response:
-        with open(tmp_path, 'wb') as tmp_file:
-            shutil.copyfileobj(response.raw, tmp_file)
-    
-    # Move the temporary file to the desired location
-    shutil.move(tmp_path, path)
-    
-    return path
-
 def download(
-        name: Literal['GNPS-LIBRARY.mgf']
+        name: Literal['ALL_GNPS.mgf',
+            'GNPS-LIBRARY.mgf', 
+            'pesticides.mgf',
+            'GNPS-MSMLS.mgf',
+            'MASSBANK.mgf',]
     ) -> str:
+    if name == 'ALL_GNPS.mgf':
+        warnings.warn(f"As of 2024, {name} is a large file (1.76GB) make sure the machine can handle this")
+        
     known_hash = {
         'GNPS-LIBRARY.mgf': '235f7518536e4b04a4fd11def3d60cffada2760ceee8e96ca356d873dbb2b440'
     }
+    
     return pooch.retrieve(
         url=f"https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/{name}",
-        known_hash=known_hash.get(name)
+        known_hash=known_hash.get(name),
+        progressbar=True
     )
