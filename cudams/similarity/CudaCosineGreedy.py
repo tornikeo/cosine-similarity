@@ -67,13 +67,13 @@ class CudaCosineGreedy(BaseSimilarity):
         batches_r = []
         for bstart, bend in argbatch(references, self.batch_size):
             rbatch = references[bstart:bend]
-            rspec, rlen = spectra_peaks_to_tensor(rbatch, dtype=np.float32)
+            rspec, rlen = spectra_peaks_to_tensor(rbatch, dtype=np.float32, ignore_null_spectra=True)
             batches_r.append([rspec, rlen, bstart, bend])
 
         batches_q = []
         for bstart, bend in argbatch(queries, self.batch_size):
             qbatch = queries[bstart:bend]
-            qspec, qlen = spectra_peaks_to_tensor(qbatch, dtype=np.float32)
+            qspec, qlen = spectra_peaks_to_tensor(qbatch, dtype=np.float32, ignore_null_spectra=True)
             batches_q.append([qspec, qlen, bstart, bend])
 
         batches_rq = list(product(batches_r, batches_q))

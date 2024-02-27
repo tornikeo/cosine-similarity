@@ -71,6 +71,7 @@ def ignore_performance_warnings():
 def spectra_peaks_to_tensor(
     spectra: list, dtype: str = "float32", 
     pad: int = None,
+    ignore_null_spectra: bool = False
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Working with GPU requires us to have a fixed shape for mz/int arrays.
@@ -91,12 +92,15 @@ def spectra_peaks_to_tensor(
     int = np.empty((len(spectra), sp_max_shape), dtype=dtype)
     batch = np.empty(len(spectra), dtype=np.int32)
     for i, s in enumerate(spectra):
-        # .to_numpy creates an unneeded copy - we don't need to do that twice
-        # spec_len = min(len(s.peaks), spectra_len_cutoff)
-        spec_len = min(len(s.peaks), sp_max_shape)
-        mz[i, :spec_len] = s._peaks.mz[:spec_len]
-        int[i, :spec_len] = s._peaks.intensities[:spec_len]
-        batch[i] = spec_len
+        if s is not None:
+            # .to_numpy creates an unneeded copy - we don't need to do that twice
+            # spec_len = min(len(s.peaks), spectra_len_cutoff)
+            spec_len = min(len(s.peaks), sp_max_shape)
+            mz[i, :spec_len] = s._peaks.mz[:spec_len]
+            int[i, :spec_len] = s._peaks.intensities[:spec_len]
+            batch[i] = spec_len
+        elif s is None and ignore_null_spectra:
+            batch[i] = 0
     spec = np.stack([mz, int], axis=0)
     return spec, batch
 
