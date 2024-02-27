@@ -230,16 +230,18 @@ def get_spectra_batches(
 
 def download(
         name: Literal['ALL_GNPS.mgf',
+            'ALL_GNPS.pickle',
             'GNPS-LIBRARY.mgf', 
             'pesticides.mgf',
             'GNPS-MSMLS.mgf',
             'MASSBANK.mgf',]
     ) -> str:
-    if name == 'ALL_GNPS.mgf':
+    if 'ALL_GNPS' in name:
         warnings.warn(f"As of 2024, {name} is a large file (1.76GB) make sure the machine can handle this")
         
     known_hash = {
-        'GNPS-LIBRARY.mgf': '235f7518536e4b04a4fd11def3d60cffada2760ceee8e96ca356d873dbb2b440'
+        'GNPS-LIBRARY.mgf': '235f7518536e4b04a4fd11def3d60cffada2760ceee8e96ca356d873dbb2b440',
+        'ALL_GNPS.mgf':'22dcd7a254393688936d6c530abc3927be3bb0997125bd54dc94eff8b65947f8',
     }
     
     return pooch.retrieve(
