@@ -8,14 +8,22 @@ from matchms.similarity import CosineGreedy, FingerprintSimilarity
 from ..builder_Spectrum import SpectrumBuilder
 from matchms import calculate_scores, Scores
 
-def equality_function_cosine_greedy(scores_cu: Scores, scores: Scores):
+def equality_function_cosine_greedy(scores: Scores, scores_cu: Scores):
     score = scores[f'CosineGreedy_score']
     score_cu = scores_cu[f'CudaCosineGreedy_score']
-    assert np.allclose(score, score_cu, equal_nan=True)
-    
     matches = scores['CosineGreedy_matches']
     matches_cu = scores_cu['CudaCosineGreedy_matches']
-    assert np.allclose(matches, matches_cu, equal_nan=True)
+    not_ovfl = (1 - scores_cu['CudaCosineGreedy_overflow'])
+    
+    # We allow only overflowed values to be different (don't count toward acc)
+    acc = np.isclose(matches * not_ovfl, matches_cu * not_ovfl, equal_nan=True)
+    assert acc.mean() == 1
+    
+    acc = np.isclose(score * not_ovfl, score_cu * not_ovfl, equal_nan=True)
+    assert acc.mean() == 1
+    
+    # We allow only few overflows
+    assert not_ovfl.mean() >= .99
     
 
 def equality_function_fingerprint(scores: Scores, scores_cu: Scores, ):
@@ -50,6 +58,7 @@ def test_compatibility(
         is_symmetric=True
     ).to_array()
     cuda_similarity_function = cuda_similarity_function(*cu_args)
+    
     scores_cu = calculate_scores(
         references=references,
         queries=queries,
