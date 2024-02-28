@@ -1,13 +1,11 @@
 from typing import List, Union
 import numpy as np
+from sparsestack import StackedSparseArray
 from matchms.similarity.BaseSimilarity import BaseSimilarity
 from matchms import Spectrum
-# from .vector_similarity_functions import (cosine_similarity,
-#                                           cosine_similarity_matrix,
-#                                           dice_similarity,
-#                                           dice_similarity_matrix,
-#                                           jaccard_index,
-#                                           jaccard_similarity_matrix)
+import warnings
+import torch
+from torch import Tensor
 from .kernels import (cosine_similarity_matrix,
                       dice_similarity_matrix,
                       jaccard_similarity_matrix)
@@ -92,14 +90,15 @@ class CudaFingerprintSimilarity(BaseSimilarity):
         """
         fingerprint_ref = reference.get("fingerprint")
         fingerprint_query = query.get("fingerprint")
+        
         if self.similarity_measure == "jaccard":
-            return jaccard_index(fingerprint_ref, fingerprint_query)
+            return jaccard_similarity_matrix([fingerprint_ref], [fingerprint_query])
 
         if self.similarity_measure == "dice":
-            return dice_similarity(fingerprint_ref, fingerprint_query)
+            return dice_similarity_matrix([fingerprint_ref], [fingerprint_query])
 
         if self.similarity_measure == "cosine":
-            score = cosine_similarity(fingerprint_ref, fingerprint_query)
+            score = cosine_similarity_matrix([fingerprint_ref], [fingerprint_query])
             return np.asarray(score, dtype=self.score_datatype)
 
         raise NotImplementedError
@@ -149,6 +148,8 @@ class CudaFingerprintSimilarity(BaseSimilarity):
 
         # Calculate similarity score matrix following specified method
         similarity_matrix = create_full_matrix()
+        
+        
         if self.similarity_measure == "jaccard":
             similarity_matrix[np.ix_(idx_fingerprints1,
                                         idx_fingerprints2)] = jaccard_similarity_matrix(fingerprints1,
