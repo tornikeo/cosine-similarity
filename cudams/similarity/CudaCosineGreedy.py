@@ -30,7 +30,7 @@ class CudaCosineGreedy(BaseSimilarity):
         intensity_power: float = 1.0,
         shift: float = 0,
         batch_size: int = 1024,
-        match_limit: int = 512,
+        match_limit: int = 1024,
         verbose=False,
     ):
         self.tolerance = tolerance
