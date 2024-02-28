@@ -9,6 +9,7 @@ CUDA-accelerated mass-spectrum similarity kernels
 
 Currently supported similarity kernels:
 - [CosineGreedy](https://matchms.readthedocs.io/en/latest/_modules/matchms/similarity/CosineGreedy.html)
+- [FingerprintSimilarity](https://matchms.readthedocs.io/en/latest/_modules/matchms/similarity/FingerprintSimilarity.html) (`jaccard`, `cosine`, `dice`)
 - More coming soon...
 
 # How to use
