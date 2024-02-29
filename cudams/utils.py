@@ -253,3 +253,11 @@ def download(
         known_hash=known_hash.get(name),
         progressbar=True
     )
+import time
+class Timer:
+    def __enter__(self):
+        self.duration = -time.perf_counter()
+        return self
+    def __exit__(self):
+        self.duration += time.perf_counter()
+        
