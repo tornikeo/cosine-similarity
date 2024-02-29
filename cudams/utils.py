@@ -236,6 +236,7 @@ def download(
         name: Literal['ALL_GNPS.mgf',
             'ALL_GNPS.pickle',
             'GNPS-LIBRARY.mgf', 
+            'GNPS-LIBRARY.pickle', 
             'pesticides.mgf',
             'GNPS-MSMLS.mgf',
             'MASSBANK.mgf',]

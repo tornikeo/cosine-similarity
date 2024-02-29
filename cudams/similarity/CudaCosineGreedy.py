@@ -136,7 +136,10 @@ class CudaCosineGreedy(BaseSimilarity):
     ) -> np.ndarray:        
         if is_symmetric:
             warnings.warn("is_symmetric is ignored here, it has no effect.")
-
+            
+        if threshold <= .5 and len(references) * len(queries) > 5_000 ** 2:
+            warnings.warn(f"Threshold of {threshold} when working with large spectra will likely cause an OOM error. Use with care.")
+            
         batches_r = []
         for bstart, bend in argbatch(references, self.batch_size):
             rbatch = references[bstart:bend]

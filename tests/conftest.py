@@ -71,45 +71,34 @@ def patch_harmonize_values(monkeypatch):
 
 @pytest.fixture(scope='session')
 def gnps_library_512():
-    from cudams.utils import download
-    from matchms.filtering import default_filters, normalize_intensities, reduce_to_number_of_peaks
-    from matchms.importing import load_from_mgf
-    from joblib import Parallel, delayed
-    
-    fpath = download('GNPS-LIBRARY.mgf')
-
-    def parse_spectrum(spectrum):
-        spectrum = default_filters(spectrum)
-        spectrum = reduce_to_number_of_peaks(spectrum, n_max=1024)
-        spectrum = normalize_intensities(spectrum)
-        return spectrum
-    
-    spectra = tuple(sp for _, sp in zip(range(1024), load_from_mgf(fpath)))
-    spectra = Parallel(-2)(delayed(parse_spectrum)(s) for s in spectra)
-    spectra = [spe for spe in spectra if spe is not None]
+    from cudams.utils import download    
+    from matchms.filtering import add_fingerprint
+    import pickle
+    spectra = pickle.load(open(download('GNPS-LIBRARY.pickle'),'rb'))
     spectra = spectra[:512]
+    spectra = [add_fingerprint(s) for s in spectra]
     yield spectra
     
 
 @pytest.fixture(scope='session')
 def gnps_library_256():
     from cudams.utils import download
+    from matchms.filtering import add_fingerprint
+    import pickle
+    spectra = pickle.load(open(download('GNPS-LIBRARY.pickle'),'rb'))
+    spectra = spectra[:256]
+    spectra = [add_fingerprint(s) for s in spectra]
+    yield spectra
+    
+
+@pytest.fixture(scope='session')
+def gnps_library_8k():
+    from cudams.utils import download
     from matchms.filtering import default_filters, normalize_intensities, reduce_to_number_of_peaks, add_fingerprint
     from matchms.importing import load_from_mgf
     from joblib import Parallel, delayed
-    
-    fpath = download('GNPS-LIBRARY.mgf')
-
-    def parse_spectrum(spectrum):
-        spectrum = default_filters(spectrum)
-        spectrum = reduce_to_number_of_peaks(spectrum, n_max=1024)
-        spectrum = normalize_intensities(spectrum)
-        return spectrum
-    
-    spectra = tuple(sp for _, sp in zip(range(1024), load_from_mgf(fpath)))
-    spectra = Parallel(-2)(delayed(parse_spectrum)(s) for s in spectra)
-    spectra = [spe for spe in spectra if spe is not None]
-    spectra = spectra[:512]
-    spectra = [add_fingerprint(x, nbits=256) for x in spectra] 
+    import pickle
+    spectra = tuple(pickle.load(open(download('GNPS-LIBRARY.pickle'),'rb')))
+    spectra = spectra[:2**13]
     yield spectra
     
