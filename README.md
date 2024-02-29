@@ -19,6 +19,17 @@ The **easiest way** to get started is to use the <a target="_blank" href="https:
 
 ## Run on Colab
 
+Colab samples:
+
+<a target="_blank" href="https://colab.research.google.com/github/tornikeo/cosine-similarity/blob/main/notebooks/samples/upload_your_own_mgf.ipynb">
+  <img alt="Static Badge" src="https://img.shields.io/badge/colab-upload_your_mgf-blue?logo=googlecolab">
+</a>
+
+<a target="_blank" href="https://colab.research.google.com/github/tornikeo/cosine-similarity/blob/main/notebooks/performance/performance_defaults.ipynb">
+  <img alt="Static Badge" src="https://img.shields.io/badge/colab-speed_benchmark-blue?logo=googlecolab">
+</a>
+
+
 ## Install locally
 
 ```bash

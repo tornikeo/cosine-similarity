@@ -258,6 +258,6 @@ class Timer:
     def __enter__(self):
         self.duration = -time.perf_counter()
         return self
-    def __exit__(self):
+    def __exit__(self, *args):
         self.duration += time.perf_counter()
         
