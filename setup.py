@@ -33,7 +33,6 @@ setup(
         "torch",
         "rdkit",
         "h5py",
-        "pydantic",
         "pandas",
         "joblib",
         "tqdm",

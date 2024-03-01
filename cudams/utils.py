@@ -1,43 +1,33 @@
 import contextlib
 import io
-import os
+import json
 import re
 import shutil
 import sys
 import warnings
+from contextlib import contextmanager
+from itertools import product
 from pathlib import Path
-import os    
-import json
-import warnings
-from pathlib import Path
-from typing import List, Literal, Tuple, Optional
+from typing import List, Literal, Iterable
 import numpy as np
 import pandas as pd
-from joblib import Parallel, delayed
-from itertools import product
 from matchms import Spectrum
 from matchms.filtering import (add_losses, normalize_intensities,
                                reduce_to_number_of_peaks,
                                require_minimum_number_of_peaks, select_by_mz,
                                select_by_relative_intensity)
 from tqdm import tqdm
-from contextlib import contextmanager
-from pathlib import Path
-import requests
-import shutil
-import pooch
-
-def batches(lst, batch_size) -> list:
-    """
-    Batch data from the iterable into tuples of length n. The last batch may be shorter than n.
-    """
-    for i in range(0, len(lst), batch_size):
-        yield lst[i : i + batch_size]
 
 
-def argbatch(lst, batch_size) -> tuple[int, int]:
+def argbatch(lst: list, batch_size: int) -> Iterable[tuple[int, int]]:
     """
-    Batch data from the iterable into tuples of start-end indices
+    Given list, return `batch_size`-d chunks from it but only as indexing arguments!
+    Can be used as follows:
+    ```
+    for bstart, bend in argbatch(references, 2048):
+        rbatch = references[bstart:bend]
+        # Do something with `rbatch`
+    ```
     """
     for i in range(0, len(lst), batch_size):
         yield i, i + batch_size
@@ -50,12 +40,6 @@ def mkdir(p: Path, clean=False) -> Path:
     p.mkdir(exist_ok=True, parents=True)
     return p
 
-
-def name2idx(p: Path) -> tuple[int, int, int, int]:
-    match = re.match(r"(\d+)-(\d+)\.(\d+)-(\d+)", p.stem)
-    rstart, rend, qstart, qend = map(int, match.groups())
-    return rstart, rend, qstart, qend
-
 @contextlib.contextmanager
 def mute_stdout():
     save_stdout = sys.stdout
@@ -67,7 +51,6 @@ def ignore_performance_warnings():
     from numba.core.errors import NumbaPerformanceWarning
     warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 
-
 def spectra_peaks_to_tensor(
     spectra: list, dtype: str = "float32", 
     pad: int = None,
@@ -75,9 +58,8 @@ def spectra_peaks_to_tensor(
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Working with GPU requires us to have a fixed shape for mz/int arrays.
-    This isn't the case for real-life data, so we have to "pad" the mz/int arrays.
-    We keep the real size of the mz/int in separate array, "batch". The regions out
-    of what "batch" specifies is undefined.
+    This isn't the case for real-life data, so we have to either pad or trim the spectra so that 
+    all of them are the same size.
 
     Returns:
         spectra: [2, len(spectra)] float32
@@ -104,23 +86,27 @@ def spectra_peaks_to_tensor(
     spec = np.stack([mz, int], axis=0)
     return spec, batch
 
-
-def process_spectrum(spectrum: np.ndarray) -> np.ndarray:
+def process_spectrum(spectrum: Spectrum) -> Spectrum | None:
+    """
+    One of the many ways to preprocess the spectrum - we use this by default.
+    """
     spectrum = select_by_mz(spectrum, mz_from=10.0, mz_to=1000.0)
     spectrum = normalize_intensities(spectrum)
     spectrum = select_by_relative_intensity(spectrum, intensity_from=0.001)
-    spectrum = reduce_to_number_of_peaks(spectrum, n_max=1000)
+    spectrum = reduce_to_number_of_peaks(spectrum, n_max=1024)
     spectrum = require_minimum_number_of_peaks(spectrum, n_required=5)
     return spectrum
 
 def get_ref_spectra_from_df(spectra_df, 
                             limit=None,
                             spectrum_processor: callable = process_spectrum,
-                            ) -> pd.DataFrame:
+                            ) -> list[Spectrum]:
     """
-    This function will take a dataframe with spectra and return a list of matchms spectra.
-    Since all rows are independent, this function does this preprocessing in parallel (CPU).
+    Convenience function that reads a pair of CSV datasets with columns like `pbid`,`precursor_mz`, etc. and 
+    returns parsed and preprocessed spectra as a list.
     """
+    from joblib import Parallel, delayed
+
     # for index, row in spectra_df.iterrows():
     def fn(index, row):
         pbid = row["pbid"]
@@ -163,10 +149,20 @@ def get_spectra_batches(
     padding=None,
     dtype='float32',
     verbose=False,
-) -> Tuple[list[Spectrum], list[Spectrum], list[np.ndarray]]:
+) -> tuple[list[Spectrum], list[Spectrum], list[np.ndarray]]:
     """
-    Returns references, queries and batched inputs, ready to be used in a kernel.
-    
+    Convenience function that does everything the `get_ref_spectra_from_df` does, but also 
+    transforms all the spectra into neat batches with same shape, so that they are ready for 
+    GPU processing.
+
+    :param str reference_csv_file: A suitable csv file path (str)
+    :param str query_csv_file: A suitable csv file path (str)
+    :param str preprocess: Can be 'minimal' or 'full'. Determines which `matchms.filtering` functions we will use for spectra.
+    :param int max_peaks: determines the maximum length of spectra (after this number, spectra are truncated, if spectra are smaller, they are instead padded with zeros).
+    :param int padding: unused - this would make every *batch* the same shape. For current kernels we don't need this. If we were to port this to support Google's TPUs, we will likely need this then.
+    :param str dtype: numpy dtype of returned batches.
+    :param bool verbose: Allows reporting progress using `tqdm`.
+    :return: three lists - references, queries and list of numpy matrices. The latter can be 
     """
     reference_csv_file = Path(reference_csv_file)
     query_csv_file = Path(query_csv_file)
@@ -241,6 +237,7 @@ def download(
             'GNPS-MSMLS.mgf',
             'MASSBANK.mgf',]
     ) -> str:
+    import pooch
     if 'ALL_GNPS' in name:
         warnings.warn(f"As of 2024, {name} is a large file (1.76GB) make sure the machine can handle this")
         
@@ -255,6 +252,8 @@ def download(
         progressbar=True
     )
 import time
+
+
 class Timer:
     def __enter__(self):
         self.duration = -time.perf_counter()

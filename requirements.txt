@@ -10,4 +10,3 @@ pyyaml
 python-dotenv
 joblib
 pytest
-pydantic

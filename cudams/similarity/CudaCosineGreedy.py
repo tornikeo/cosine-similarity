@@ -1,25 +1,19 @@
 import math
 import warnings
 from itertools import product
-from multiprocessing import shared_memory
-from multiprocessing.pool import ThreadPool
 from pathlib import Path
-from time import perf_counter
-from typing import List, Literal, Tuple
-from matchms.typing import SpectrumType
+from typing import List, Literal
 import numpy as np
-from matchms.similarity import CosineGreedy
-from matchms.similarity.BaseSimilarity import BaseSimilarity
-from matchms import Spectrum
-from numba import cuda
-from pydantic import BaseModel, Field
-from scipy import sparse
-from tqdm import tqdm
 import torch
+from matchms import Spectrum
+from matchms.similarity.BaseSimilarity import BaseSimilarity
+from matchms.typing import SpectrumType
+from numba import cuda
+from tqdm import tqdm
 
-from ..utils import get_ref_spectra_from_df, spectra_peaks_to_tensor, \
-    argbatch, mkdir, name2idx
-from .kernels import compile_cuda_cosine_greedy_kernel
+from ..utils import (argbatch, spectra_peaks_to_tensor)
+from .spectrum_similarity_functions import cosine_greedy_kernel
+
 
 class CudaCosineGreedy(BaseSimilarity):
     score_datatype = [("score", np.float32), ("matches", np.int32), ("overflow", np.uint8)]
@@ -42,7 +36,7 @@ class CudaCosineGreedy(BaseSimilarity):
         self.match_limit = match_limit
         self.verbose = verbose
 
-        self.kernel = compile_cuda_cosine_greedy_kernel(
+        self.kernel = cosine_greedy_kernel(
             tolerance=self.tolerance,
             shift=self.shift,
             mz_power=self.mz_power,

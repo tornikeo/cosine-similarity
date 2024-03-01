@@ -1,13 +1,10 @@
 from typing import List, Union
 import numpy as np
-from sparsestack import StackedSparseArray
-from matchms.similarity.BaseSimilarity import BaseSimilarity
 from matchms import Spectrum
-import warnings
-import torch
-from torch import Tensor
-from .kernels import (cosine_similarity_matrix,
-                      dice_similarity_matrix,
+from matchms.similarity.BaseSimilarity import BaseSimilarity
+from sparsestack import StackedSparseArray
+
+from .vector_similarity_functions import (cosine_similarity_matrix, dice_similarity_matrix,
                       jaccard_similarity_matrix)
 
 
