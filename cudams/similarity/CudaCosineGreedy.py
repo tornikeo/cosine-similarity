@@ -159,7 +159,7 @@ class CudaCosineGreedy(BaseSimilarity):
         results = []
 
         with torch.no_grad():
-            for batch_i in tqdm(range(len(batched_inputs))):
+            for batch_i in tqdm(range(len(batched_inputs)), disable=not self.verbose):
                 (rspec, rlen, rstart, rend), (qspec, qlen, qstart, qend) = batched_inputs[
                     batch_i
                 ]

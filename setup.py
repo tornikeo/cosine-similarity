@@ -29,15 +29,14 @@ setup(
     python_requires='>=3.8',
     install_requires=[
         "matchms>=0.24.0",
+        "numba",
         "torch",
         "rdkit",
         "h5py",
         "pydantic",
-        "numba",
         "pandas",
         "joblib",
         "tqdm",
-        "requests",
         "pooch"
     ],
 )
