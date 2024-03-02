@@ -20,15 +20,23 @@ The **easiest way** to get started is to use the <a target="_blank" href="https:
 
 ## Run on Colab
 
-Colab samples:
+### Colab samples:
+
+
 
 <a target="_blank" href="https://colab.research.google.com/github/tornikeo/cosine-similarity/blob/main/notebooks/samples/upload_your_own_mgf.ipynb">
   <img alt="Static Badge" src="https://img.shields.io/badge/colab-upload_your_mgf-blue?logo=googlecolab">
+  
 </a>
+Upload your two custom (possibly same) `.mgf` files and their similarities qucikly!
 
 <a target="_blank" href="https://colab.research.google.com/github/tornikeo/cosine-similarity/blob/main/notebooks/performance/performance_defaults.ipynb">
   <img alt="Static Badge" src="https://img.shields.io/badge/colab-speed_benchmark-blue?logo=googlecolab">
 </a>
+
+
+Replicate some of our performance results on free Colab GPU hardware!
+
 
 
 ## Install locally
