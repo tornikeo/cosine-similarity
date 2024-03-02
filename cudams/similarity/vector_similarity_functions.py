@@ -6,7 +6,7 @@ import torch
 from numba import cuda, types
 from torch import Tensor
 
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def jaccard_similarity_matrix(references: np.ndarray, queries: np.ndarray) -> np.ndarray:
     """Returns matrix of jaccard indices between all-vs-all vectors of references
@@ -29,9 +29,8 @@ def jaccard_similarity_matrix(references: np.ndarray, queries: np.ndarray) -> np
     """
     
     # We know references and queries have same number of elements (bits)
-
-    refs = torch.as_tensor(references).to(device).float() # Shape R, N
-    ques = torch.as_tensor(queries).to(device).float() # Shape Q, N
+    refs = torch.as_tensor(np.array(references, copy=False)).to(device).float() # Shape R, N
+    ques = torch.as_tensor(np.array(queries, copy=False)).to(device).float() # Shape Q, N
     
     intersection = (refs @ ques.T) # Shape R, Q, all intersection rows are summed
     union = refs.sum(1, keepdim=True) + ques.sum(1, keepdim=True).T # R, Q

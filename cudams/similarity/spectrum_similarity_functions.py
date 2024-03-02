@@ -6,7 +6,7 @@ import torch
 from numba import cuda, types
 from torch import Tensor
 
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def cosine_greedy_kernel(
     tolerance: float = 0.1,

@@ -58,7 +58,7 @@ class CudaCosineGreedy(BaseSimilarity):
     ) -> np.ndarray:
         if is_symmetric:
             warnings.warn("is_symmetric is ignored here, it has no effect.")
-        device = torch.device('cuda')
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
         host = torch.device('cpu')
         batches_r = []
         for bstart, bend in argbatch(references, self.batch_size):
@@ -147,7 +147,8 @@ class CudaCosineGreedy(BaseSimilarity):
             batches_q.append([qspec, qlen, bstart, bend])
 
         batched_inputs = tuple(product(batches_r, batches_q))
-        device = torch.device('cuda')
+
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
         host = torch.device('cpu')
         
         results = []
