@@ -8,7 +8,7 @@ import warnings
 from contextlib import contextmanager
 from itertools import product
 from pathlib import Path
-from typing import List, Literal, Iterable
+from typing import List, Literal, Iterable, Optional
 import numpy as np
 import pandas as pd
 from matchms import Spectrum
@@ -86,7 +86,7 @@ def spectra_peaks_to_tensor(
     spec = np.stack([mz, int], axis=0)
     return spec, batch
 
-def process_spectrum(spectrum: Spectrum) -> Spectrum | None:
+def process_spectrum(spectrum: Spectrum) -> Optional[Spectrum]:
     """
     One of the many ways to preprocess the spectrum - we use this by default.
     """
