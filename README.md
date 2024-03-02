@@ -37,19 +37,25 @@ Upload your two custom (possibly same) `.mgf` files and their similarities qucik
 
 Replicate some of our performance results on free Colab GPU hardware!
 
-
-
 ## Install locally
 
+In case you experience slow installs, we recommend you switch from `conda` to [`micromamba`](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html). It is much faster. Total size of the environment will be around 7-8GB.
+
 ```bash
+# Create clean python environment (we support python versions 3.9 - 3.11)
+conda create -n cudams python=3.11 -y
 # Install cudatoolkit
-conda install cudatoolkit
-# Install numba
-conda install numba
-# Install matchms
+conda install nvidia::cuda-toolkit -y
+# Install torch
+# You **will most likley have to** follow official guide for torch (see here https://pytorch.org/get-started/locally/#start-locally)
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia -y
+
+# Install numba (if this fails, follow the official gude https://numba.pydata.org/numba-doc/latest/user/installing.html#installing-using-conda-on-x86-x86-64-power-platforms)
+conda install numba -y
+
+# Install matchms (if this fails, again, follow the official guide https://github.com/matchms/matchms?tab=readme-ov-file#installation)
 pip install matchms[chemistry]
-# (Optional for very large, sparse outputs) install pytorch
-conda install pytorch pytorch-cuda=12.1 -c pytorch -c nvidia
+
 # Install this repository
 pip install git+https://github.com/tornikeo/cosine-similarity
 ```

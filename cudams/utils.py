@@ -17,7 +17,8 @@ from matchms.filtering import (add_losses, normalize_intensities,
                                require_minimum_number_of_peaks, select_by_mz,
                                select_by_relative_intensity)
 from tqdm import tqdm
-
+import re
+import subprocess
 
 def argbatch(lst: list, batch_size: int) -> Iterable[tuple[int, int]]:
     """
@@ -260,4 +261,24 @@ class Timer:
         return self
     def __exit__(self, *args):
         self.duration += time.perf_counter()
-        
+
+
+def get_device_name_as_str():
+    """
+    Returns the current GPU name, useful for printing and plotting, and not much else. Use like:
+
+    from cudams.utils import get_device_name_as_str
+    gpu_names = get_device_name_as_str()
+    print("GPU Device Names:")
+    for name in gpu_names:
+        print(name)
+    """
+    try:
+        output = subprocess.check_output(["nvidia-smi", "-L"], shell=True, stderr=subprocess.PIPE, universal_newlines=True)
+        gpu_names = re.findall(r"GPU \d+: (.+?) \(UUID:", output)
+        return gpu_names
+    except subprocess.CalledProcessError as e:
+        print("Error: Failed to run nvidia-smi.")
+        print(e.stderr)
+        return []
+
