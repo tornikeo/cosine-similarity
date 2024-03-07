@@ -30,6 +30,7 @@ setup(
     install_requires=[
         "matchms>=0.24.0",
         "numba",
+        "numpy<=1.24"
         "torch",
         "rdkit",
         "h5py",
