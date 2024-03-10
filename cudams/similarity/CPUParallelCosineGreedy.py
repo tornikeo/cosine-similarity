@@ -55,19 +55,14 @@ class CPUParallelCosineGreedy(BaseSimilarity):
         if is_symmetric:
             warnings.warn("is_symmetric is ignored here, it has no effect.")
 
-        refs = tuple(r.peaks.to_numpy for r in references)
-        ques = tuple(q.peaks.to_numpy for q in queries)
-        results = []
+        refs = tuple(r.peaks.to_numpy.T for r in references)
+        ques = tuple(q.peaks.to_numpy.T for q in queries)
+
+        results = self.kernel(
+            refs,
+            ques
+        )
         
-        # 100 is fixed by NUMBA, we can't do more than this.
-        for bstart in range(0, len(refs), self.batch_size):
-            refs_b = refs[bstart:bstart + self.batch_size]
-            result = self.kernel(
-                refs_b,
-                ques
-            )
-            results.append(result)
-        results = np.concatenate(results, 0)
         return np.rec.fromarrays(
             results,
             dtype=self.score_datatype,

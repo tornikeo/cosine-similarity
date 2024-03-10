@@ -2,7 +2,7 @@ import math
 import numba
 import numpy as np
 import torch
-from numba import cuda, types, prange
+from numba import cuda, types, prange, pndindex
 from matchms.similarity.spectrum_similarity_functions import collect_peak_pairs, score_best_matches
 from torch import Tensor
 
@@ -248,20 +248,21 @@ def cpu_parallel_cosine_greedy_kernel(tolerance: float = 0.1,
         Q = len(ques)
 
         scores = np.zeros((2, R, Q), dtype=np.float32)
-        for i in prange(R):
-            for j in range(Q): # Inner parallelization isn't helpful    
-                ref = refs[i]
-                que = ques[j]
-                matching_pairs = collect_peak_pairs(ref, que, 
-                                                    tolerance=tolerance,
-                                                    shift=shift, 
-                                                    mz_power=mz_power,
-                                                    intensity_power=int_power)
-                if matching_pairs is None:
-                    continue;
-                matching_pairs = matching_pairs[np.argsort(matching_pairs[:, 2], kind='mergesort')[::-1], :]
-                score, matches = score_best_matches(matching_pairs, que, ref, mz_power, int_power)
-                scores[0, i, j] = score
-                scores[1, i, j] = matches
+        for x in pndindex(R, Q): 
+            print(x)
+            # ref = refs[i]
+            # que = ques[j]
+            # matching_pairs = collect_peak_pairs(ref, 
+            #                                     que, 
+            #                                     tolerance=tolerance,
+            #                                     shift=shift, 
+            #                                     mz_power=mz_power,
+            #                                     intensity_power=int_power)
+            # if matching_pairs is None:
+            #     continue;
+            # matching_pairs = matching_pairs[np.argsort(matching_pairs[:, 2], kind='mergesort')[::-1], :]
+            # score, matches = score_best_matches(matching_pairs, que, ref, mz_power, int_power)
+            # scores[0, i, j] = score
+            # scores[1, i, j] = matches
         return scores
     return cpu_kernel
