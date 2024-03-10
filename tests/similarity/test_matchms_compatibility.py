@@ -66,10 +66,3 @@ def test_compatibility(
     ).to_array()
     
     equality_function(scores, scores_cu)
-    
-    # try:    
-    #     overflow_cu = scores_cu[f'{similarity_function.__class__.__name__}_overflow']
-    #     assert np.allclose(matches, matches_cu)
-    # except KeyError:
-    #     pass
-    

@@ -1,9 +1,9 @@
 import math
-
 import numba
 import numpy as np
 import torch
-from numba import cuda, types
+from numba import cuda, types, prange
+from matchms.similarity.spectrum_similarity_functions import collect_peak_pairs, score_best_matches
 from torch import Tensor
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -13,29 +13,10 @@ def cosine_greedy_kernel(
     shift: float = 0,
     mz_power: float = 0.0,
     int_power: float = 1.0,
-    match_limit: int = 128,
-    batch_size: int = 4096,
+    match_limit: int = 1024,
+    batch_size: int = 2048,
     is_symmetric: bool = False
 ) -> callable:
-    """
-    JIT compiles the kernel for CUDA device, and bakes in constants (tolerance, shift, etc.)
-    Returns a callable that takes in arguments:
-        rspec_cu:
-            DeviceNDArray, [2, R, M] float32
-        qspec_cu:
-            DeviceNDArray, [2, Q, N] float32
-        lens_cu, [2, max(R,Q)] int32
-            The "2" in front is because these is mz and int stacked on top of each other
-        out_cu, [R,Q,2] float32
-            Contains both score (0) and counts (1) for each RQ pair
-        overflow_cu, [R,Q,1] uint8
-            Contains 1 - if overflow happened at RQ
-        stream: cuda.stream
-            Necessary to keep GPU as busy as possible.
-
-    This callable will run JIT-ed cuda kernel. All arguments must already reside in GPU memory.
-    First-time use will cause the kernel "warm-up", so subsequent runs will be much faster.
-    """
     if is_symmetric:
         import warnings
         warnings.warn("no effect from is_symmetric, it is not yet implemented")
@@ -230,3 +211,57 @@ def cosine_greedy_kernel(
         )
 
     return kernel
+
+def cpu_parallel_cosine_greedy_kernel(tolerance: float = 0.1,
+        shift: float = 0,
+        mz_power: float = 0.0,
+        int_power: float = 1.0,
+        match_limit: int = 1024,
+        batch_size: int = 2048,
+        is_symmetric: bool = False
+    ) -> callable:
+
+    @numba.jit(nopython=True, parallel=True)
+    def cpu_kernel(
+        refs: list[np.ndarray], 
+        ques: list[np.ndarray],
+        ) -> np.ndarray:
+        """Returns matrix of cosine similarity scores between all-vs-all vectors of
+        references and queries.
+
+        Parameters
+        ----------
+        references
+            Reference vectors as 2D numpy array. Expects that vector_i corresponds to
+            references[i, :].
+        queries
+            Query vectors as 2D numpy array. Expects that vector_i corresponds to
+            queries[i, :].
+
+        Returns
+        -------
+        scores
+            Matrix of all-vs-all similarity scores. scores[i, j] will contain the score
+            between the vectors references[i, :] and queries[j, :].
+        """
+        R = len(refs)
+        Q = len(ques)
+
+        scores = np.zeros((2, R, Q), dtype=np.float32)
+        for i in prange(R):
+            for j in range(Q): # Inner parallelization isn't helpful    
+                ref = refs[i]
+                que = ques[j]
+                matching_pairs = collect_peak_pairs(ref, que, 
+                                                    tolerance=tolerance,
+                                                    shift=shift, 
+                                                    mz_power=mz_power,
+                                                    intensity_power=int_power)
+                if matching_pairs is None:
+                    continue;
+                matching_pairs = matching_pairs[np.argsort(matching_pairs[:, 2], kind='mergesort')[::-1], :]
+                score, matches = score_best_matches(matching_pairs, que, ref, mz_power, int_power)
+                scores[0, i, j] = score
+                scores[1, i, j] = matches
+        return scores
+    return cpu_kernel
