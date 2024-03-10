@@ -22,8 +22,8 @@ class CPUParallelCosineGreedy(BaseSimilarity):
         tolerance: float = 0.1,
         mz_power: float = 0.0,
         intensity_power: float = 1.0,
+        batch_size: int = 100,
         shift: float = 0,
-        batch_size: int = 1024,
         match_limit: int = 1024,
         verbose=False,
     ):
@@ -31,9 +31,11 @@ class CPUParallelCosineGreedy(BaseSimilarity):
         self.mz_power = mz_power
         self.int_power = intensity_power
         self.shift = shift
-        self.batch_size = batch_size
         self.match_limit = match_limit
         self.verbose = verbose
+        if batch_size > 100:
+            warnings.warn("Batch size larger than 100 might cause issues with numba.")
+        self.batch_size = batch_size
 
         self.kernel = cpu_parallel_cosine_greedy_kernel(
             tolerance=self.tolerance,
@@ -55,14 +57,19 @@ class CPUParallelCosineGreedy(BaseSimilarity):
 
         refs = tuple(r.peaks.to_numpy for r in references)
         ques = tuple(q.peaks.to_numpy for q in queries)
-
-        result = self.kernel(
-            refs,
-            ques
-        )
-            
+        results = []
+        
+        # 100 is fixed by NUMBA, we can't do more than this.
+        for bstart in range(0, len(refs), self.batch_size):
+            refs_b = refs[bstart:bstart + self.batch_size]
+            result = self.kernel(
+                refs_b,
+                ques
+            )
+            results.append(result)
+        results = np.concatenate(results, 0)
         return np.rec.fromarrays(
-            result,
+            results,
             dtype=self.score_datatype,
         )
 
