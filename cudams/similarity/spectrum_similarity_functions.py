@@ -1,12 +1,15 @@
 import math
+
 import numba
 import numpy as np
 import torch
-from numba import cuda, types, prange, pndindex
-from matchms.similarity.spectrum_similarity_functions import collect_peak_pairs, score_best_matches
+from matchms.similarity.spectrum_similarity_functions import (
+    collect_peak_pairs, score_best_matches)
+from numba import cuda, pndindex, prange, types
 from torch import Tensor
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 def cosine_greedy_kernel(
     tolerance: float = 0.1,
@@ -15,22 +18,23 @@ def cosine_greedy_kernel(
     int_power: float = 1.0,
     match_limit: int = 1024,
     batch_size: int = 2048,
-    is_symmetric: bool = False
+    is_symmetric: bool = False,
 ) -> callable:
     if is_symmetric:
         import warnings
+
         warnings.warn("no effect from is_symmetric, it is not yet implemented")
-        
+
     MATCH_LIMIT = match_limit
     R, Q = batch_size, batch_size
     # Since the first outer loop in acc step is iterating over references,
-    # It is faster to have a block that runs same reference, over multiple 
+    # It is faster to have a block that runs same reference, over multiple
     # queries, so that thread divergence is minimzed
     THREADS_PER_BLOCK = (1, 512 + 256)
     BLOCKS_PER_GRID_X = math.ceil(R / THREADS_PER_BLOCK[0])
     BLOCKS_PER_GRID_Y = math.ceil(Q / THREADS_PER_BLOCK[1])
     BLOCKS_PER_GRID = (BLOCKS_PER_GRID_X, BLOCKS_PER_GRID_Y)
-    
+
     @cuda.jit
     def _kernel(
         rspec,
@@ -42,7 +46,7 @@ def cosine_greedy_kernel(
         # score_out = out[0]
         # matches_out = out[1]
         # overflow_out = out[2]
-        
+
         # thread_i = cuda.threadIdx.x
         # thread_j = cuda.threadIdx.y
         # block_size_x = cuda.blockDim.x
@@ -56,7 +60,7 @@ def cosine_greedy_kernel(
             out[2, i, j] = 0
 
             # mem = cuda.shared.array((4, 4, 4, 32), types.float32)
-            rmz = rspec[0] # rspec shape is [2, 2048, 256], rmz shape is [2048, 256]
+            rmz = rspec[0]  # rspec shape is [2, 2048, 256], rmz shape is [2048, 256]
             rint = rspec[1]
             qmz = qspec[0]
             qint = qspec[1]
@@ -106,10 +110,10 @@ def cosine_greedy_kernel(
             # out[i, j, 0] = 1
             # out[i, j, 1] = num_match
             # return
-            
+
             if num_match == 0:
                 return
-            
+
             score_norm = types.float64(1.0)
             score_norm_spec1 = types.float64(0.0)
             score_norm_spec2 = types.float64(0.0)
@@ -126,12 +130,12 @@ def cosine_greedy_kernel(
                     * (spec2_int[peak2_idx] ** int_power)
                 ) ** 2
             score_norm = math.sqrt(score_norm_spec1 * score_norm_spec2)
-            
+
             # Debug checkpoint
             # out[i, j, 0] = score_norm
             # out[i, j, 1] = num_match
             # return
-            
+
             # TODO: VERY slow - Bubble sort (This should also be done in several threads)
             # We need two cases, bubble sort up to 50 elems is fine
             score = types.float32(0.0)
@@ -153,19 +157,19 @@ def cosine_greedy_kernel(
                             spec2_int[peak2_idx] ** int_power
                         )
                         prod = power_prod_spec1 * power_prod_spec2
-                        
+
                         # > was changed to >= and that took 2 weeks... also finding that 'mergesort' in original similarity algorithm
                         # is what can prevent instability.
                         if prod >= max_prod:
                             max_prod = prod
                             max_peak1_idx = peak1_idx
                             max_peak2_idx = peak2_idx
-                            
+
                 # Debug checkpoint
                 # out[i, j, 0] = max_prod
                 # out[i, j, 1] = used_matches
                 # return
-                
+
                 if max_prod != -1:
                     for sj in range(0, num_match):
                         if (
@@ -178,16 +182,15 @@ def cosine_greedy_kernel(
                     used_matches += 1
                 else:
                     break
-                
-                
+
             # debug checkpoint
             # out[i, j, 0] = score_norm
             # out[i, j, 1] = used_matches
             # return
-                
+
             # out[i, j, 0] = matches[0, MATCH_LIMIT-1]
             # out[i, j, 1] = matches[1, MATCH_LIMIT-1]
-            
+
             # out[i, j, 0] = matches[0, 0]
             # out[i, j, 1] = matches[1, 0]
             # return
@@ -212,20 +215,21 @@ def cosine_greedy_kernel(
 
     return kernel
 
-def cpu_parallel_cosine_greedy_kernel(tolerance: float = 0.1,
-        shift: float = 0,
-        mz_power: float = 0.0,
-        int_power: float = 1.0,
-        match_limit: int = 1024,
-        batch_size: int = 2048,
-        is_symmetric: bool = False
-    ) -> callable:
 
+def cpu_parallel_cosine_greedy_kernel(
+    tolerance: float = 0.1,
+    shift: float = 0,
+    mz_power: float = 0.0,
+    int_power: float = 1.0,
+    match_limit: int = 1024,
+    batch_size: int = 2048,
+    is_symmetric: bool = False,
+) -> callable:
     @numba.jit(nopython=True, parallel=True)
     def cpu_kernel(
-        refs: list[np.ndarray], 
+        refs: list[np.ndarray],
         ques: list[np.ndarray],
-        ) -> np.ndarray:
+    ) -> np.ndarray:
         """Returns matrix of cosine similarity scores between all-vs-all vectors of
         references and queries.
 
@@ -248,14 +252,14 @@ def cpu_parallel_cosine_greedy_kernel(tolerance: float = 0.1,
         Q = len(ques)
 
         scores = np.zeros((2, R, Q), dtype=np.float32)
-        for x in pndindex(R, Q): 
+        for x in pndindex(R, Q):
             print(x)
             # ref = refs[i]
             # que = ques[j]
-            # matching_pairs = collect_peak_pairs(ref, 
-            #                                     que, 
+            # matching_pairs = collect_peak_pairs(ref,
+            #                                     que,
             #                                     tolerance=tolerance,
-            #                                     shift=shift, 
+            #                                     shift=shift,
             #                                     mz_power=mz_power,
             #                                     intensity_power=int_power)
             # if matching_pairs is None:
@@ -265,4 +269,5 @@ def cpu_parallel_cosine_greedy_kernel(tolerance: float = 0.1,
             # scores[0, i, j] = score
             # scores[1, i, j] = matches
         return scores
+
     return cpu_kernel

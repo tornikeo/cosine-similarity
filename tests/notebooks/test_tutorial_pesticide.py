@@ -1,19 +1,21 @@
-from matchms.importing import load_from_mgf
-from matchms.filtering import default_filters
-from matchms.filtering import normalize_intensities
-from matchms import calculate_scores
-from matchms.similarity import CosineGreedy
-from cudams.similarity import CudaCosineGreedy
-from numba import cuda
-from matchms.filtering import reduce_to_number_of_peaks
-import numpy as np
-from cudams.utils import download
 from pathlib import Path
+
+import numpy as np
+from matchms import calculate_scores
+from matchms.filtering import (default_filters, normalize_intensities,
+                               reduce_to_number_of_peaks)
+from matchms.importing import load_from_mgf
+from matchms.similarity import CosineGreedy
+from numba import cuda
+
+from cudams.similarity import CudaCosineGreedy
+from cudams.utils import download
+
 
 def test_tutorial_pesticide():
     assert cuda.is_available()
-    pest_file = download('pesticides.mgf')
-    
+    pest_file = download("pesticides.mgf")
+
     file = list(load_from_mgf(pest_file))
     # Apply filters to clean and enhance each spectrum
     spectrums = []
@@ -25,18 +27,18 @@ def test_tutorial_pesticide():
         # Scale peak intensities to maximum of 1
         spectrum = normalize_intensities(spectrum)
         spectrums.append(spectrum)
-    
-    scores = calculate_scores(references=spectrums,
-                          queries=spectrums,
-                          similarity_function=CosineGreedy(),
-                          is_symmetric=True)
-    
+
+    scores = calculate_scores(
+        references=spectrums,
+        queries=spectrums,
+        similarity_function=CosineGreedy(),
+        is_symmetric=True,
+    )
 
     # Matchms allows to get the best matches for any query using scores_by_query
     query = spectrums[15]  # just an example
-    best_matches = scores.scores_by_query(query, 'CosineGreedy_score', sort=True)
+    best_matches = scores.scores_by_query(query, "CosineGreedy_score", sort=True)
 
-            
     # It is necessary to make sure that the number of peaks are reasonable
 
     MAX_PEAKS = 1024
@@ -52,18 +54,21 @@ def test_tutorial_pesticide():
 
     f_specs = [process_spectrum(s) for s in spectrums]
     scores_cu = calculate_scores(
-    references=f_specs,
-    queries=f_specs, 
-    similarity_function=CudaCosineGreedy(batch_size=512))
+        references=f_specs,
+        queries=f_specs,
+        similarity_function=CudaCosineGreedy(batch_size=512),
+    )
     # This computed all-vs-all similarity scores, the array of which can be accessed as scores.scores
     print(f"Size of matrix of computed similarities: {scores_cu.scores.shape}")
 
     # Matchms allows to get the best matches for any query using scores_by_query
     query = spectrums[15]  # just an example
-    best_matches_cu = scores_cu.scores_by_query(query, 'CudaCosineGreedy_score', sort=True)
-    
+    best_matches_cu = scores_cu.scores_by_query(
+        query, "CudaCosineGreedy_score", sort=True
+    )
+
     # Print the calculated scores_cu for each spectrum pair
-    for (reference, (score, matches, overflow)) in best_matches_cu[:10]:
+    for reference, (score, matches, overflow) in best_matches_cu[:10]:
         # Ignore scores_cu between same spectrum
         if reference != query:
             print(f"Reference scan id: {reference.metadata['scans']}")
@@ -72,7 +77,7 @@ def test_tutorial_pesticide():
             print(f"Number of matching peaks: {matches}")
             print(f"Did GPU overflow at this pair: {overflow}")
             print("----------------------------")
-            
+
     for a, b in zip(best_matches[:20], best_matches_cu[:20]):
         reference, (score_a, matches_a) = a
         reference, (score_b, matches_b, overflow_b) = b
@@ -80,7 +85,11 @@ def test_tutorial_pesticide():
             # If we didn't overflow
             if not overflow_b:
                 assert np.isclose(score_a, score_b), ("score error", score_a, score_b)
-                assert np.isclose(matches_a, matches_b), ('match error', matches_a, matches_b)
+                assert np.isclose(matches_a, matches_b), (
+                    "match error",
+                    matches_a,
+                    matches_b,
+                )
             # If overflow, score must be leq
             else:
                 assert score_a >= score_b

@@ -1,11 +1,13 @@
 from typing import List, Union
+
 import numpy as np
 from matchms import Spectrum
 from matchms.similarity.BaseSimilarity import BaseSimilarity
 from sparsestack import StackedSparseArray
 
-from .vector_similarity_functions import (cosine_similarity_matrix, dice_similarity_matrix,
-                      jaccard_similarity_matrix)
+from .vector_similarity_functions import (cosine_similarity_matrix,
+                                          dice_similarity_matrix,
+                                          jaccard_similarity_matrix)
 
 
 class CudaFingerprintSimilarity(BaseSimilarity):
@@ -54,11 +56,15 @@ class CudaFingerprintSimilarity(BaseSimilarity):
          [0.415 0.444 1.   ]]
 
     """
+
     is_commutative = True
     score_datatype = np.float32
 
-    def __init__(self, similarity_measure: str = "jaccard",
-                 set_empty_scores: Union[float, int, str] = "nan"):
+    def __init__(
+        self,
+        similarity_measure: str = "jaccard",
+        set_empty_scores: Union[float, int, str] = "nan",
+    ):
         """
 
         Parameters
@@ -72,7 +78,11 @@ class CudaFingerprintSimilarity(BaseSimilarity):
             np.nan's in such cases.
         """
         self.set_empty_scores = set_empty_scores
-        assert similarity_measure in ["cosine", "dice", "jaccard"], "Unknown similarity measure."
+        assert similarity_measure in [
+            "cosine",
+            "dice",
+            "jaccard",
+        ], "Unknown similarity measure."
         self.similarity_measure = similarity_measure
 
     def pair(self, reference: Spectrum, query: Spectrum) -> float:
@@ -87,7 +97,7 @@ class CudaFingerprintSimilarity(BaseSimilarity):
         """
         fingerprint_ref = reference.get("fingerprint")
         fingerprint_query = query.get("fingerprint")
-        
+
         if self.similarity_measure == "jaccard":
             return jaccard_similarity_matrix([fingerprint_ref], [fingerprint_query])
 
@@ -100,9 +110,13 @@ class CudaFingerprintSimilarity(BaseSimilarity):
 
         raise NotImplementedError
 
-    def matrix(self, references: List[Spectrum], queries: List[Spectrum],
-               array_type: str = "numpy",
-               is_symmetric: bool = False) -> np.array:
+    def matrix(
+        self,
+        references: List[Spectrum],
+        queries: List[Spectrum],
+        array_type: str = "numpy",
+        is_symmetric: bool = False,
+    ) -> np.array:
         """Calculate matrix of fingerprint based similarity scores.
 
         Parameters
@@ -115,6 +129,7 @@ class CudaFingerprintSimilarity(BaseSimilarity):
             Specify the output array type. Can be "numpy" or "sparse".
             Default is "numpy" and will return a numpy array. "sparse" will return a COO-sparse array
         """
+
         def get_fingerprints(spectrums):
             for index, spectrum in enumerate(spectrums):
                 yield index, spectrum.get("fingerprint")
@@ -140,28 +155,31 @@ class CudaFingerprintSimilarity(BaseSimilarity):
 
         fingerprints1, idx_fingerprints1 = collect_fingerprints(references)
         fingerprints2, idx_fingerprints2 = collect_fingerprints(queries)
-        assert idx_fingerprints1.size > 0 and idx_fingerprints2.size > 0, ("Not enouth molecular fingerprints.",
-                                                                           "Apply 'add_fingerprint'filter first.")
+        assert idx_fingerprints1.size > 0 and idx_fingerprints2.size > 0, (
+            "Not enouth molecular fingerprints.",
+            "Apply 'add_fingerprint'filter first.",
+        )
 
         # Calculate similarity score matrix following specified method
         similarity_matrix = create_full_matrix()
-        
-        
+
         if self.similarity_measure == "jaccard":
-            similarity_matrix[np.ix_(idx_fingerprints1,
-                                        idx_fingerprints2)] = jaccard_similarity_matrix(fingerprints1,
-                                                                                        fingerprints2)
+            similarity_matrix[
+                np.ix_(idx_fingerprints1, idx_fingerprints2)
+            ] = jaccard_similarity_matrix(fingerprints1, fingerprints2)
         elif self.similarity_measure == "dice":
-            similarity_matrix[np.ix_(idx_fingerprints1,
-                                        idx_fingerprints2)] = dice_similarity_matrix(fingerprints1,
-                                                                                     fingerprints2)
+            similarity_matrix[
+                np.ix_(idx_fingerprints1, idx_fingerprints2)
+            ] = dice_similarity_matrix(fingerprints1, fingerprints2)
         elif self.similarity_measure == "cosine":
-            similarity_matrix[np.ix_(idx_fingerprints1,
-                                        idx_fingerprints2)] = cosine_similarity_matrix(fingerprints1,
-                                                                                       fingerprints2)
+            similarity_matrix[
+                np.ix_(idx_fingerprints1, idx_fingerprints2)
+            ] = cosine_similarity_matrix(fingerprints1, fingerprints2)
         if array_type == "sparse":
             scores_array = StackedSparseArray(len(references), len(queries))
-            scores_array.add_dense_matrix(similarity_matrix.astype(self.score_datatype), "")
+            scores_array.add_dense_matrix(
+                similarity_matrix.astype(self.score_datatype), ""
+            )
             return scores_array
         if array_type == "numpy":
             return similarity_matrix.astype(self.score_datatype)

@@ -1,18 +1,29 @@
-import pytest, warnings
+import warnings
 
-@pytest.fixture(autouse=True, scope='session')
+import pytest
+
+
+@pytest.fixture(autouse=True, scope="session")
 def warn_on_no_cuda():
-    import os, numba
+    import os
+
+    import numba
+
     if not numba.cuda.is_available():
-        warnings.warn("CUDA was unavailable - consider using `NUMBA_ENABLE_CUDASIM=1 pytest <same args, if any>` to simulate having GPU and cudatoolkit for testing purposes")
+        warnings.warn(
+            "CUDA was unavailable - consider using `NUMBA_ENABLE_CUDASIM=1 pytest <same args, if any>` to simulate having GPU and cudatoolkit for testing purposes"
+        )
     yield
-        
-@pytest.fixture(autouse=True, scope='session')
+
+
+@pytest.fixture(autouse=True, scope="session")
 def ignore_warnings():
     import os
-    os.environ['NUMBA_DISABLE_PERFORMANCE_WARNINGS'] = '1'
+
+    os.environ["NUMBA_DISABLE_PERFORMANCE_WARNINGS"] = "1"
     yield
-    
+
+
 @pytest.fixture(autouse=True)
 def patch_harmonize_values(monkeypatch):
     """
@@ -41,10 +52,14 @@ def patch_harmonize_values(monkeypatch):
             metadata_filtered["ionmode"] = self.get("ionmode").lower()
 
         if metadata_filtered.get("retention_time"):
-            metadata_filtered = _add_retention(metadata_filtered, "retention_time", _retention_time_keys)
+            metadata_filtered = _add_retention(
+                metadata_filtered, "retention_time", _retention_time_keys
+            )
 
         if metadata_filtered.get("retention_index"):
-            metadata_filtered = _add_retention(metadata_filtered, "retention_index", _retention_index_keys)
+            metadata_filtered = _add_retention(
+                metadata_filtered, "retention_index", _retention_index_keys
+            )
 
         if metadata_filtered.get("parent"):
             metadata_filtered["parent"] = float(metadata_filtered.get("parent"))
@@ -56,49 +71,58 @@ def patch_harmonize_values(monkeypatch):
 
         invalid_entries = ["", "NA", "N/A", "NaN"]
 
-        
         metadata_filtered_ = {}
         # Necessary to check not isinstance(..., str), since some values are arrays, and `not in`
         # operator results in iterable, that has an ambiguous truth value
-        for k,v in metadata_filtered.items():
+        for k, v in metadata_filtered.items():
             if not isinstance(v, str) or v not in invalid_entries:
                 metadata_filtered_[k] = v
         self.data = metadata_filtered_
 
-    monkeypatch.setattr(Metadata, 'harmonize_values', harmonize_values)
+    monkeypatch.setattr(Metadata, "harmonize_values", harmonize_values)
     yield
-    
 
-@pytest.fixture(scope='session')
+
+@pytest.fixture(scope="session")
 def gnps_library_512():
-    from cudams.utils import download    
-    from matchms.filtering import add_fingerprint
     import pickle
-    spectra = pickle.load(open(download('GNPS-LIBRARY.pickle'),'rb'))
+
+    from matchms.filtering import add_fingerprint
+
+    from cudams.utils import download
+
+    spectra = pickle.load(open(download("GNPS-LIBRARY.pickle"), "rb"))
     spectra = spectra[:512]
     spectra = [add_fingerprint(s) for s in spectra]
     yield spectra
-    
 
-@pytest.fixture(scope='session')
+
+@pytest.fixture(scope="session")
 def gnps_library_256():
-    from cudams.utils import download
-    from matchms.filtering import add_fingerprint
     import pickle
-    spectra = pickle.load(open(download('GNPS-LIBRARY.pickle'),'rb'))
+
+    from matchms.filtering import add_fingerprint
+
+    from cudams.utils import download
+
+    spectra = pickle.load(open(download("GNPS-LIBRARY.pickle"), "rb"))
     spectra = spectra[:256]
     spectra = [add_fingerprint(s) for s in spectra]
     yield spectra
-    
 
-@pytest.fixture(scope='session')
+
+@pytest.fixture(scope="session")
 def gnps_library_8k():
-    from cudams.utils import download
-    from matchms.filtering import default_filters, normalize_intensities, reduce_to_number_of_peaks, add_fingerprint
-    from matchms.importing import load_from_mgf
-    from joblib import Parallel, delayed
     import pickle
-    spectra = tuple(pickle.load(open(download('GNPS-LIBRARY.pickle'),'rb')))
-    spectra = spectra[:2**13]
+
+    from joblib import Parallel, delayed
+    from matchms.filtering import (add_fingerprint, default_filters,
+                                   normalize_intensities,
+                                   reduce_to_number_of_peaks)
+    from matchms.importing import load_from_mgf
+
+    from cudams.utils import download
+
+    spectra = tuple(pickle.load(open(download("GNPS-LIBRARY.pickle"), "rb")))
+    spectra = spectra[: 2**13]
     yield spectra
-    

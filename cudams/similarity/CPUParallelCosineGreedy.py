@@ -3,6 +3,7 @@ import warnings
 from itertools import product
 from pathlib import Path
 from typing import List, Literal
+
 import numpy as np
 import torch
 from matchms import Spectrum
@@ -10,13 +11,14 @@ from matchms.similarity.BaseSimilarity import BaseSimilarity
 from matchms.typing import SpectrumType
 from tqdm import tqdm
 
-from ..utils import (argbatch, spectra_peaks_to_tensor)
-from .spectrum_similarity_functions import cosine_greedy_kernel,\
-    cpu_parallel_cosine_greedy_kernel
+from ..utils import argbatch, spectra_peaks_to_tensor
+from .spectrum_similarity_functions import (cosine_greedy_kernel,
+                                            cpu_parallel_cosine_greedy_kernel)
 
 
 class CPUParallelCosineGreedy(BaseSimilarity):
     score_datatype = [("score", np.float32), ("matches", np.int32)]
+
     def __init__(
         self,
         tolerance: float = 0.1,
@@ -58,11 +60,8 @@ class CPUParallelCosineGreedy(BaseSimilarity):
         refs = tuple(r.peaks.to_numpy.T for r in references)
         ques = tuple(q.peaks.to_numpy.T for q in queries)
 
-        results = self.kernel(
-            refs,
-            ques
-        )
-        
+        results = self.kernel(refs, ques)
+
         return np.rec.fromarrays(
             results,
             dtype=self.score_datatype,
@@ -71,14 +70,14 @@ class CPUParallelCosineGreedy(BaseSimilarity):
     def pair(self, reference: Spectrum, query: Spectrum) -> float:
         result_mat = self.matrix([reference], [query])
         return np.asarray(result_mat.squeeze(), dtype=self.score_datatype)
-    
+
     def matrix(
         self,
         references: List[Spectrum],
         queries: List[Spectrum],
         array_type: Literal["numpy"] = "numpy",
         is_symmetric: bool = False,
-        sparse_threshold: float = .75
+        sparse_threshold: float = 0.75,
     ) -> np.ndarray:
         """Provide optimized method to calculate an np.array of similarity scores
         for given reference and query spectrums.
@@ -100,8 +99,10 @@ class CPUParallelCosineGreedy(BaseSimilarity):
             and the resulting large sparse score matrix is returned as a scipy.sparse matrix (both scores and overflows)
         """
         assert self.kernel is not None, "Kernel isn't compiled - use .compile() first"
-        
+
         if array_type == "numpy":
-            return self._matrix_with_numpy_output(references, queries, is_symmetric=is_symmetric)
+            return self._matrix_with_numpy_output(
+                references, queries, is_symmetric=is_symmetric
+            )
         else:
             raise NotImplementedError()

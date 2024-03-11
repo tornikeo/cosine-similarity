@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import os
-from setuptools import find_packages, setup
 
+from setuptools import find_packages, setup
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -17,7 +17,7 @@ setup(
     version=version["__version__"],
     description="CUDA-accelerated cosine similarity measure for comparing MS/MS spectra.",
     long_description=readme,
-    long_description_content_type='text/markdown',
+    long_description_content_type="text/markdown",
     author="Tornike Onoprishvili",
     author_email="tornikeonoprishvili@gmail.com",
     url="https://github.com/tornikeo/cosine-similarity",
@@ -26,7 +26,7 @@ setup(
     license="Apache Software License 2.0",
     zip_safe=False,
     test_suite="tests",
-    python_requires='>=3.8',
+    python_requires=">=3.8",
     install_requires=[
         "matchms>=0.24.0",
         "numba",
@@ -37,6 +37,6 @@ setup(
         "pandas",
         "joblib",
         "tqdm",
-        "pooch"
+        "pooch",
     ],
 )
