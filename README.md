@@ -26,7 +26,7 @@ The **easiest way** to get started is to use the <a target="_blank" href="https:
 
 <a target="_blank" href="https://colab.research.google.com/github/tornikeo/cosine-similarity/blob/main/notebooks/samples/upload_your_own_mgf.ipynb">
   <img alt="Static Badge" src="https://img.shields.io/badge/colab-upload_your_mgf-blue?logo=googlecolab">
-  
+
 </a>
 Upload your two custom (possibly same) `.mgf` files and their similarities qucikly!
 
@@ -65,6 +65,3 @@ pip install git+https://github.com/tornikeo/cosine-similarity
 
 
 ## Run on vast.ai
-
-
-
