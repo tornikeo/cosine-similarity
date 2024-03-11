@@ -156,7 +156,7 @@ class CudaFingerprintSimilarity(BaseSimilarity):
         fingerprints1, idx_fingerprints1 = collect_fingerprints(references)
         fingerprints2, idx_fingerprints2 = collect_fingerprints(queries)
         assert idx_fingerprints1.size > 0 and idx_fingerprints2.size > 0, (
-            "Not enouth molecular fingerprints.",
+            "Not enough molecular fingerprints.",
             "Apply 'add_fingerprint'filter first.",
         )
 

@@ -1,4 +1,4 @@
-import os
+import os, warnings
 from contextlib import contextmanager
 
 # Patch cuda.pinned and as_cuda_array before https://github.com/numba/numba/pull/9458 gets merged
@@ -14,3 +14,6 @@ if os.getenv("NUMBA_ENABLE_CUDASIM") == "1":
 
     cuda.pinned = fake_cuda_pinned
     cuda.as_cuda_array = fake_as_cuda_array
+
+# Same warnings are given once
+warnings.simplefilter('default', Warning)

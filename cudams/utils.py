@@ -77,6 +77,12 @@ def spectra_peaks_to_tensor(
     else:
         sp_max_shape = pad
 
+    if sp_max_shape > 2048:
+        warnings.warn(
+            "Some spectra are very long (>2048 peaks), consider using `matchms.filtering.reduce_to_number_of_peaks` to"
+            "avoid unnecessarily long computation times."
+        )
+
     mz = np.empty((len(spectra), sp_max_shape), dtype=dtype)
     int = np.empty((len(spectra), sp_max_shape), dtype=dtype)
     batch = np.empty(len(spectra), dtype=np.int32)

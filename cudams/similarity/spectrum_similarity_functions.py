@@ -29,7 +29,7 @@ def cosine_greedy_kernel(
     R, Q = batch_size, batch_size
     # Since the first outer loop in acc step is iterating over references,
     # It is faster to have a block that runs same reference, over multiple
-    # queries, so that thread divergence is minimzed
+    # queries, so that thread divergence is minimized
     THREADS_PER_BLOCK = (1, 512 + 256)
     BLOCKS_PER_GRID_X = math.ceil(R / THREADS_PER_BLOCK[0])
     BLOCKS_PER_GRID_Y = math.ceil(Q / THREADS_PER_BLOCK[1])
@@ -225,29 +225,15 @@ def cpu_parallel_cosine_greedy_kernel(
     batch_size: int = 2048,
     is_symmetric: bool = False,
 ) -> callable:
+    """
+    Work-in-progress CPU-Parallel implementation of Cosine Greedy. With CUDA cosine greedy (even on colab), this function
+    isn't worth using. Mostly used for benchmarking and comparison.
+    """
     @numba.jit(nopython=True, parallel=True)
     def cpu_kernel(
         refs: list[np.ndarray],
         ques: list[np.ndarray],
     ) -> np.ndarray:
-        """Returns matrix of cosine similarity scores between all-vs-all vectors of
-        references and queries.
-
-        Parameters
-        ----------
-        references
-            Reference vectors as 2D numpy array. Expects that vector_i corresponds to
-            references[i, :].
-        queries
-            Query vectors as 2D numpy array. Expects that vector_i corresponds to
-            queries[i, :].
-
-        Returns
-        -------
-        scores
-            Matrix of all-vs-all similarity scores. scores[i, j] will contain the score
-            between the vectors references[i, :] and queries[j, :].
-        """
         R = len(refs)
         Q = len(ques)
 
