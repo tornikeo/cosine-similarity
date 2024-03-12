@@ -38,5 +38,19 @@ setup(
         "joblib",
         "tqdm",
         "pooch",
+        'seaborn',
+        'matplotlib',
+        'scikit-learn'
     ],
+    extras_require={
+        'dev': [
+            'pytest',
+            'pytest-pep8',
+            'pytest-cov',
+            'codespell',
+            'black',
+            'isort',
+            'pre-commit',
+        ],
+    }
 )
