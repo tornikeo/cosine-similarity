@@ -10,6 +10,7 @@ from matchms import Spectrum
 from matchms.similarity.BaseSimilarity import BaseSimilarity
 from matchms.typing import SpectrumType
 from numba import cuda
+from ..utils import CudaTimer
 from tqdm import tqdm
 
 from ..utils import argbatch, spectra_peaks_to_tensor
@@ -40,6 +41,7 @@ class CudaCosineGreedy(BaseSimilarity):
         self.batch_size = batch_size
         self.match_limit = match_limit
         self.verbose = verbose
+        self.kernel_time = 0 # Used for debugging and timing
 
         self.kernel = cosine_greedy_kernel(
             tolerance=self.tolerance,
@@ -84,7 +86,9 @@ class CudaCosineGreedy(BaseSimilarity):
         batched_inputs = tuple(product(batches_r, batches_q))
 
         R, Q = len(references), len(queries)
+        timer = CudaTimer()
 
+        self.kernel_time = 0
         with torch.no_grad():
             result = torch.empty(3, R, Q, dtype=torch.float32, device=device)
             for batch_i in tqdm(range(len(batched_inputs))):
@@ -116,11 +120,15 @@ class CudaCosineGreedy(BaseSimilarity):
                 )
                 out = cuda.as_cuda_array(out)
 
+                timer.start()
                 self.kernel(rspec, qspec, lens, out)
+                timer.stop()
+                self.kernel_time += timer.elapsed_seconds()
 
                 out = torch.as_tensor(out)
                 result[:, rstart:rend, qstart:qend] = out[:, : len(rlen), : len(qlen)]
 
+        self.kernel_time /= len(batched_inputs)
         return np.rec.fromarrays(
             result.to(host).numpy(),
             dtype=self.score_datatype,
