@@ -289,3 +289,49 @@ class Timer:
 
     def __exit__(self, *args):
         self.duration += time.perf_counter()
+
+
+cudams_style = {
+    # Seaborn common parameters
+    'figure.facecolor': 'white',
+    'text.color': '.15',
+    'axes.labelcolor': '.15',
+    'legend.frameon': False,
+    'legend.numpoints': 1,
+    'legend.scatterpoints': 1,
+    'xtick.direction': 'out',
+    'ytick.direction': 'out',
+    'xtick.color': '.15',
+    'ytick.color': '.15',
+    'axes.axisbelow': True,
+    'image.cmap': 'Greys',
+    'font.family': 'sans-serif',
+    'font.sans-serif': ['Arial', 'Liberation Sans', 'DejaVu Sans', 'Bitstream Vera Sans', 'sans-serif'],
+    'grid.linestyle': '-',
+    'lines.solid_capstyle': 'round',
+
+    # Seaborn whitegrid parameters
+    'axes.grid': True,
+    'axes.facecolor': 'white',
+    'axes.edgecolor': '.8',
+    'axes.linewidth': 1,
+    'grid.color': '.8',
+    'xtick.major.size': 0,
+    'ytick.major.size': 0,
+    'xtick.minor.size': 0,
+    'ytick.minor.size': 0,
+
+    # Figure and font sizes
+    'figure.figsize': (4.9, 3.5),
+    'font.size': 11.0,
+    # 'font.family': 'serif',
+    # 'font.serif': 'Palatino',
+    'axes.titlesize': 'medium',
+    'figure.titlesize': 'medium',
+    # 'text.usetex': True,
+    # 'text.latex.preamble': r'\usepackage{amsmath}\usepackage{amssymb}\usepackage{siunitx}[=v2]'
+}
+
+def use_style():
+    import matplotlib.pyplot as plt
+    plt.style.use(cudams_style)
