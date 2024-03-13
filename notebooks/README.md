@@ -7,14 +7,19 @@ Every plot and metric in the paper, are kept in this folder. We usually rely on 
 
 These notebooks live under `samples/` directory, and they are meant to be used straight away on Colab, using T4 instance. Read more about these in the README.md.
 
-# Performance notebooks
 
-TLDR:
+# Figures
+
+We used vast.ai resources for most of our calculations.
+
 Here's a docker configuration template on vast.ai:
 > [Template Link with a referral](https://cloud.vast.ai/?ref_id=51575&creator_id=51575&name=CudaCosineGreedy%20vast.ai%20template); [Template permanent link](https://cloud.vast.ai/?ref_id=51575&template_id=f45f6048db515291bda978a34e908d09). (Referral links might refund some of your compute expenses)
 
+## About performance notebooks
 
 In order to measure performance, we need to use several different machines (GPUs).
+
+For replicating performance notebooks, it is necessary to run each notebook on a specified machine to get accurate estimates (i.e. on colab).
 
 Because of this, in order to **replicate results**, you have to execute each notebook in this on a different machine. (e.g. `performance/default_params_on_colab_t4.ipynb` is to be executed on colab, T4 instance).
 
