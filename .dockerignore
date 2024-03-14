@@ -4,3 +4,8 @@ notebooks/
 .pytest_cache/
 .vscode/
 assets/
+*.egg*
+data/
+notebooks/
+__pycache__
+assets/

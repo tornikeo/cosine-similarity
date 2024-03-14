@@ -9,8 +9,12 @@ version = {}
 with open(os.path.join(here, "cudams", "__version__.py")) as f:
     exec(f.read(), version)
 
-with open("README.md") as readme_file:
-    readme = readme_file.read()
+readme = ""
+try:
+    with open("README.md") as readme_file:
+        readme = readme_file.read()
+except:
+    pass
 
 setup(
     name="cudams",

@@ -3,6 +3,7 @@ services:
   app:
     build:
       context: .
+      dockerfile: docker/service/Dockerfile
 
     volumes:
       - .:/workdir
