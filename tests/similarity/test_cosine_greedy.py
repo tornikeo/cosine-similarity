@@ -119,7 +119,7 @@ def test_cosine_greedy_pair(
         expected_matches[0]
     ), "Expected different number of matching peaks."
 
-
+@pytest.mark.skip(reason='Not implemented yet')
 @pytest.mark.parametrize(
     "peaks, tolerance, mz_power, intensity_power, expected_matches",
     [

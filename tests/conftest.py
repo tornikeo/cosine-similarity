@@ -1,14 +1,18 @@
 import warnings
-
 import pytest
+from joblib import Memory
 
+memory = Memory(location="cache")
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "performance"
+    )
 
 @pytest.fixture(autouse=True, scope="session")
 def warn_on_no_cuda():
     import os
-
     import numba
-
     if not numba.cuda.is_available():
         warnings.warn(
             "CUDA was unavailable - consider using `NUMBA_ENABLE_CUDASIM=1 pytest <same args, if any>` to simulate having GPU and cudatoolkit for testing purposes"
@@ -83,46 +87,17 @@ def patch_harmonize_values(monkeypatch):
     yield
 
 
-@pytest.fixture(scope="session")
-def gnps_library_512():
+@pytest.fixture(scope='session')
+@memory.cache
+def gnps():
     import pickle
-
-    from matchms.filtering import add_fingerprint
-
     from cudams.utils import download
-
     spectra = pickle.load(open(download("GNPS-LIBRARY.pickle"), "rb"))
-    spectra = spectra[:512]
-    spectra = [add_fingerprint(s) for s in spectra]
-    yield spectra
+    return spectra
 
-
-@pytest.fixture(scope="session")
-def gnps_library_256():
-    import pickle
-
+@pytest.fixture(scope='session')
+@memory.cache
+def gnps_with_fingerprint(gnps: list):
     from matchms.filtering import add_fingerprint
-
-    from cudams.utils import download
-
-    spectra = pickle.load(open(download("GNPS-LIBRARY.pickle"), "rb"))
-    spectra = spectra[:256]
-    spectra = [add_fingerprint(s) for s in spectra]
-    yield spectra
-
-
-@pytest.fixture(scope="session")
-def gnps_library_8k():
-    import pickle
-
-    from joblib import Parallel, delayed
-    from matchms.filtering import (add_fingerprint, default_filters,
-                                   normalize_intensities,
-                                   reduce_to_number_of_peaks)
-    from matchms.importing import load_from_mgf
-
-    from cudams.utils import download
-
-    spectra = tuple(pickle.load(open(download("GNPS-LIBRARY.pickle"), "rb")))
-    spectra = spectra[: 2**13]
-    yield spectra
+    spectra = [add_fingerprint(s) for s in gnps]
+    return spectra

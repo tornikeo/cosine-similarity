@@ -32,6 +32,7 @@ class CudaCosineGreedy(BaseSimilarity):
         shift: float = 0,
         batch_size: int = 2048,
         match_limit: int = 2048,
+        max_spectra_length: int = 2048,
         verbose=False,
     ):
         self.tolerance = tolerance
@@ -50,6 +51,7 @@ class CudaCosineGreedy(BaseSimilarity):
             int_power=self.int_power,
             match_limit=self.match_limit,
             batch_size=self.batch_size,
+            max_spectra_length=max_spectra_length
         )
         if not cuda.is_available():
             warnings.warn(f"{self.__class__}: CUDA device seems unavailable.")
@@ -91,7 +93,7 @@ class CudaCosineGreedy(BaseSimilarity):
         self.kernel_time = 0
         with torch.no_grad():
             result = torch.empty(3, R, Q, dtype=torch.float32, device=device)
-            for batch_i in tqdm(range(len(batched_inputs))):
+            for batch_i in tqdm(range(len(batched_inputs)), disable=not self.verbose):
                 (rspec, rlen, rstart, rend), (
                     qspec,
                     qlen,

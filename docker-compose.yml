@@ -4,7 +4,6 @@ services:
     build:
       context: .
       dockerfile: docker/service/Dockerfile
-
     volumes:
       - .:/workdir
     working_dir: /workdir

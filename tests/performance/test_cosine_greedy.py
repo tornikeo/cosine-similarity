@@ -1,27 +1,26 @@
-import os
-
-import numpy as np
 import pytest
-
+import numpy as np
 from cudams.similarity import CudaCosineGreedy
-from cudams.utils import Timer
 
-from ..builder_Spectrum import SpectrumBuilder
-
-
-@pytest.mark.skipif(
-    os.getenv("PERFTEST") != "1",
-    reason="Github workflows isn't the best tool for performance measurement.",
-)
+@pytest.mark.performance
 def test_performance(
-    gnps_library_8k: list,
+    gnps: list,
 ):
-    kernel = CudaCosineGreedy(batch_size=2048, match_limit=128, verbose=True)
-    with Timer() as timer:
-        kernel.matrix(
-            gnps_library_8k,
-            gnps_library_8k,
-            array_type="sparse",
-            sparse_threshold=0.75,
+    batch_size = 1024
+    kernel = CudaCosineGreedy(batch_size=batch_size,
+                              match_limit=1024,
+                              verbose=False)
+    load = np.load('tests/data/gnps_expected.npz')
+    t = 0
+    n = 2
+    for _ in range(n):
+        result = kernel.matrix(
+            gnps[:batch_size],
+            gnps[:batch_size],
         )
-    assert timer.duration < 60
+        # np.save('tests/data/gnps_expected.npz', result)
+        t += kernel.kernel_time / n
+    print(t)
+    acc = np.isclose(load['score'], result['score']).mean()*100
+    match_acc = np.isclose(load['matches'], result['matches']).mean()*100
+    assert acc == 100 and match_acc == 100, f"{acc}, {match_acc}"

@@ -64,14 +64,14 @@ def equality_function_fingerprint(
     ],
 )
 def test_compatibility(
-    gnps_library_256: List[Spectrum],
+    gnps_with_fingerprint: List[Spectrum],
     similarity_function: BaseSimilarity,
     args: tuple,
     cuda_similarity_function: BaseSimilarity,
     cu_args: tuple,
     equality_function: callable,
 ):
-    references, queries = gnps_library_256, gnps_library_256
+    references, queries = gnps_with_fingerprint[:256], gnps_with_fingerprint[:256]
     similarity_function = similarity_function(*args)
     scores = calculate_scores(
         references=references,
