@@ -57,7 +57,7 @@ def cosine_greedy_kernel(
         block_size_y = cuda.blockDim.y
 
         # We aren't out of the RxQ grid
-        if not( i < R and j < Q ):
+        if i >= R or j >= Q:
             return
 
         # Init values (we expect these to be uninitialized)
@@ -142,7 +142,7 @@ def cosine_greedy_kernel(
         ## With  blocksize 1x256, we know R is going to be same for all threads within same block
         # spec1_mz_sh = cuda.shared.array(MAX_SPECTRA_LENGTH, types.float32)
         # spec1_int_sh = cuda.shared.array(MAX_SPECTRA_LENGTH, types.float32)
-        spec1_sh = cuda.shared.array((2, MAX_SPECTRA_LENGTH), types.float32)
+        # spec1_sh = cuda.shared.array((2, MAX_SPECTRA_LENGTH), types.float32)
         # spec1_mz_sh = cuda.shared.array(MAX_SPECTRA_LENGTH, types.float32)
         # spec1_int_sh = cuda.shared.array(MAX_SPECTRA_LENGTH, types.float32)
 
@@ -160,13 +160,16 @@ def cosine_greedy_kernel(
                 norm_accum += (mz_ ** mz_power * int_ ** int_power) ** 2
                 # cuda.atomic.add(score_norm_spec1_sh, 0, (mz_ ** mz_power * int_ ** int_power) ** 2)
 
-                spec1_sh[0, where] = mz_
-                spec1_sh[1, where] = int_
+                # spec1_sh[0, where] = mz_
+                # spec1_sh[1, where] = int_
 
         matches = cuda.local.array((2, MATCH_LIMIT), types.uint16)
+        values = cuda.local.array(MATCH_LIMIT, types.float32)
 
-        spec1_mz_sh = spec1_sh[0]
-        spec1_int_sh = spec1_sh[1]
+        # spec1_mz_sh = spec1_sh[0]
+        # spec1_int_sh = spec1_sh[1]
+        spec1_mz_sh = spec1_mz
+        spec1_int_sh = spec1_int
 
         ## Needs blocksize small enough, i.e. 1,4?
         # matches_all = cuda.shared.array((THREADS_PER_BLOCK_Y, 2, MATCH_LIMIT), types.int16)
@@ -192,6 +195,16 @@ def cosine_greedy_kernel(
                     if num_match < MATCH_LIMIT:
                         matches[0, num_match] = peak1_idx
                         matches[1, num_match] = peak2_idx
+
+                        power_prod_spec1 = (spec1_mz_sh[peak1_idx] ** mz_power) * (
+                            spec1_int_sh[peak1_idx] ** int_power
+                        )
+                        power_prod_spec2 = (spec2_mz[peak2_idx] ** mz_power) * (
+                            spec2_int[peak2_idx] ** int_power
+                        )
+                        prod = power_prod_spec1 * power_prod_spec2
+
+                        values[num_match] = prod
                         num_match += 1
                     else:
                         ovf = 1  # This is the errorcode for overflow
@@ -206,7 +219,7 @@ def cosine_greedy_kernel(
         # return
         if num_match == 0:
             return
-
+        
         score_norm = types.float32(1.0)
         # score_norm_spec1 = types.float32(0.0)
         score_norm_spec2 = types.float32(0.0)
@@ -231,49 +244,117 @@ def cosine_greedy_kernel(
         # out[i, j, 1] = num_match
         # return
 
+        ## Non-recursive merge-sort
+        
+        temp_matches = cuda.local.array((2, MATCH_LIMIT), types.uint16)
+        temp_values = cuda.local.array(MATCH_LIMIT, types.float32)
+
+        
+        # k = types.uint16(1)
+        # used_matches += 1
+        k = 1
+        while k < num_match:
+            for left in range(0, num_match - k, k * 2):
+                rght = left + k
+                rend = rght + k
+                
+                if rend > num_match:
+                    rend = num_match
+                m = left; i = left; j = rght;
+                while i < rght and j < rend:
+                    if values[i] <= values[j]:
+                        temp_matches[0, m] = matches[0, i]; 
+                        temp_matches[1, m] = matches[1, i]; 
+                        temp_values[m] = values[i]; 
+                        i+=1
+                    else:
+                        temp_matches[0, m] = matches[0, j]; 
+                        temp_matches[1, m] = matches[1, j]; 
+                        temp_values[m] = values[j]; 
+                        j+=1
+                    m+=1
+                
+                while i < rght:
+                    temp_matches[0, m] = matches[0, i]; 
+                    temp_matches[1, m] = matches[1, i]; 
+                    temp_values[m] = values[i]; 
+                    i+=1; m+=1;
+                
+                while j < rend:
+                    temp_matches[0, m] = matches[0, j]; 
+                    temp_matches[1, m] = matches[1, j]; 
+                    temp_values[m] = values[j]; 
+                    j+=1; m+=1;
+                
+                for m in range(left, rend):
+                    matches[0, m] = temp_matches[0, m]; 
+                    matches[1, m] = temp_matches[1, m]; 
+                    values[m] = temp_values[m]; 
+            k *= 2
+        
+        # out[1, i, j] = matches[0, 0]
+        used_r = cuda.local.array(MAX_SPECTRA_LENGTH, types.boolean)
+        used_q = cuda.local.array(MAX_SPECTRA_LENGTH, types.boolean)
+
+        for m in range(0, MAX_SPECTRA_LENGTH):
+            used_r[m] = False
+            used_q[m] = False
+
+        used_matches = 0
+        score = 0.0
+        for m in range(0, num_match):
+            j = (num_match - 1) - m
+            peak1_idx = matches[0, j]; 
+            peak2_idx = matches[1, j]; 
+            if (not used_r[peak1_idx]) and (not used_q[peak2_idx]):
+                used_r[peak1_idx] = True
+                used_q[peak2_idx] = True
+                score += values[j];
+                used_matches += 1
+
         # TODO: VERY slow - Bubble sort (This should also be done in several threads)
         # We need two cases, bubble sort up to 50 elems is fine
-        score = types.float32(0.0)
-        used_matches = types.uint16(0)
-        for _ in range(0, num_match):
-            max_prod = types.float32(-1.0)
-            max_peak1_idx = types.uint16(0xFFFF)
-            max_peak2_idx = types.uint16(0xFFFF)
+        # score = types.float32(0.0)
+        # used_matches = types.uint16(0)
+        # for _ in range(0, num_match):
+        #     max_prod = types.float32(-1.0)
+        #     max_peak1_idx = types.uint16(0xFFFF)
+        #     max_peak2_idx = types.uint16(0xFFFF)
 
-            for sj in range(0, num_match):
-                if matches[0, sj] != 0xFFFF:
-                    peak1_idx = matches[0, sj]
-                    peak2_idx = matches[1, sj]
+        #     for sj in range(0, num_match):
+        #         if matches[0, sj] != 0xFFFF:
+        #             peak1_idx = matches[0, sj]
+        #             peak2_idx = matches[1, sj]
 
-                    power_prod_spec1 = (spec1_mz_sh[peak1_idx] ** mz_power) * (
-                        spec1_int_sh[peak1_idx] ** int_power
-                    )
-                    power_prod_spec2 = (spec2_mz[peak2_idx] ** mz_power) * (
-                        spec2_int[peak2_idx] ** int_power
-                    )
-                    prod = power_prod_spec1 * power_prod_spec2
+        #             power_prod_spec1 = (spec1_mz_sh[peak1_idx] ** mz_power) * (
+        #                 spec1_int_sh[peak1_idx] ** int_power
+        #             )
+        #             power_prod_spec2 = (spec2_mz[peak2_idx] ** mz_power) * (
+        #                 spec2_int[peak2_idx] ** int_power
+        #             )
+        #             prod = power_prod_spec1 * power_prod_spec2
 
-                    # > was changed to >= and that took 2 weeks... also finding that 'mergesort' in original similarity algorithm
-                    # is what can prevent instability.
-                    if prod >= max_prod:
-                        max_prod = prod
-                        max_peak1_idx = peak1_idx
-                        max_peak2_idx = peak2_idx
+        #             # > was changed to >= and that took 2 weeks... also finding that 'mergesort' in original similarity algorithm
+        #             # is what can prevent instability.
+        #             if prod >= max_prod:
+        #                 max_prod = prod
+        #                 max_peak1_idx = peak1_idx
+        #                 max_peak2_idx = peak2_idx
 
-            # Debug checkpoint
-            # out[i, j, 0] = max_prod
-            # out[i, j, 1] = used_matches
-            # return
+        #     # Debug checkpoint
+        #     # out[i, j, 0] = max_prod
+        #     # out[i, j, 1] = used_matches
+        #     # return
 
-            if max_prod != -1:
-                for sj in range(0, num_match):
-                    if (matches[0, sj] == max_peak1_idx or matches[1, sj] == max_peak2_idx):
-                        matches[0, sj] = 0xFFFF # "Remove" it
-                        matches[1, sj] = 0xFFFF # "Remove" it
-                score += max_prod
-                used_matches += 1
-            else:
-                break
+        #     if max_prod != -1:
+        #         for sj in range(0, num_match):
+        #             if (matches[0, sj] == max_peak1_idx or matches[1, sj] == max_peak2_idx):
+        #                 matches[0, sj] = 0xFFFF # "Remove" it
+        #                 matches[1, sj] = 0xFFFF # "Remove" it
+        #         score += max_prod
+        #         used_matches += 1
+        #     else:
+        #         break
 
         # debug checkpoint
         # out[i, j, 0] = score_norm
@@ -287,8 +368,7 @@ def cosine_greedy_kernel(
         # out[i, j, 1] = matches[1, 0]
         # return
 
-        score = score / score_norm
-        out[0, i, j] = score
+        out[0, i, j] = score / score_norm
         out[1, i, j] = used_matches
 
     def kernel(
