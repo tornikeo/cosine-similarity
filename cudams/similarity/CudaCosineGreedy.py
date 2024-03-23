@@ -31,8 +31,8 @@ class CudaCosineGreedy(BaseSimilarity):
         intensity_power: float = 1.0,
         shift: float = 0,
         batch_size: int = 2048,
+        n_max_peaks: int = 1024,
         match_limit: int = 2048,
-        max_spectra_length: int = 2048,
         verbose=False,
     ):
         self.tolerance = tolerance
@@ -42,6 +42,7 @@ class CudaCosineGreedy(BaseSimilarity):
         self.batch_size = batch_size
         self.match_limit = match_limit
         self.verbose = verbose
+        self.n_max_peaks = n_max_peaks
         self.kernel_time = 0 # Used for debugging and timing
 
         self.kernel = cosine_greedy_kernel(
@@ -51,7 +52,7 @@ class CudaCosineGreedy(BaseSimilarity):
             int_power=self.int_power,
             match_limit=self.match_limit,
             batch_size=self.batch_size,
-            max_spectra_length=max_spectra_length
+            n_max_peaks=self.n_max_peaks
         )
         if not cuda.is_available():
             warnings.warn(f"{self.__class__}: CUDA device seems unavailable.")

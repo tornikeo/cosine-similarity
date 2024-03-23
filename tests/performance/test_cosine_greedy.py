@@ -8,12 +8,11 @@ def test_performance(
 ):
     batch_size = 1024
     kernel = CudaCosineGreedy(batch_size=batch_size,
-                              max_spectra_length=1024,
                               match_limit=1024,
                               verbose=False)
     load = np.load('tests/data/gnps_expected.npz')
     t = 0
-    n = 3
+    n = 5
     for _ in range(n):
         result = kernel.matrix(
             gnps[:batch_size],
