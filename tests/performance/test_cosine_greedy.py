@@ -13,7 +13,7 @@ def test_performance(
                               verbose=False)
     load = np.load('tests/data/gnps_expected.npz')
     t = 0
-    n = 1
+    n = 3
     for _ in range(n):
         result = kernel.matrix(
             gnps[:batch_size],
