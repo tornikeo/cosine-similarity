@@ -103,8 +103,8 @@ class CudaCosineGreedy(BaseSimilarity):
                 ) = batched_inputs[batch_i]
 
                 lens = torch.zeros(2, self.batch_size, dtype=torch.int32)
-                lens[0, : len(rlen)] = torch.from_numpy(rlen)
-                lens[1, : len(qlen)] = torch.from_numpy(qlen)
+                lens[0, :len(rlen)] = torch.from_numpy(rlen)
+                lens[1, :len(qlen)] = torch.from_numpy(qlen)
                 lens = lens.to(device)
 
                 rspec = torch.from_numpy(rspec).to(device)

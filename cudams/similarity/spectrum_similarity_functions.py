@@ -23,7 +23,6 @@ def cosine_greedy_kernel(
 ) -> callable:
     if is_symmetric:
         import warnings
-
         warnings.warn("no effect from is_symmetric, it is not yet implemented")
 
     MATCH_LIMIT = match_limit
@@ -33,7 +32,7 @@ def cosine_greedy_kernel(
     # It is faster to have a block that runs same reference, over multiple
     # queries, so that thread divergence is minimized
     THREADS_PER_BLOCK_X = 1
-    THREADS_PER_BLOCK_Y = 512
+    THREADS_PER_BLOCK_Y = 512 + 256
     THREADS_PER_BLOCK = (THREADS_PER_BLOCK_X, THREADS_PER_BLOCK_Y)
     BLOCKS_PER_GRID_X = math.ceil(R / THREADS_PER_BLOCK_X)
     BLOCKS_PER_GRID_Y = math.ceil(Q / THREADS_PER_BLOCK_Y)
@@ -52,6 +51,13 @@ def cosine_greedy_kernel(
         thread_j = cuda.threadIdx.y
         block_size_x = cuda.blockDim.x
         block_size_y = cuda.blockDim.y
+        
+        ## PART 1, CALCULATE SCORE NORMS
+        # Since blocksize is 1xN, with RxQ layout, we know that all threads in a block
+        # work on the same R. So, we calculate R-norm together, and store it in shared memory so all threads can access it later on
+        score_norm_spec1_sh = cuda.shared.array(1, types.float32)
+        score_norm_spec1_sh[0] = 0
+        cuda.syncthreads()
 
         # We aren't out of the RxQ grid
         if i >= R or j >= Q:
@@ -82,21 +88,11 @@ def cosine_greedy_kernel(
         spec2_mz = qmz[j]
         spec2_int = qint[j]
 
-
-        ## PART 1, CALCULATE SCORE NORMS
-        # Since blocksize is 1xN, with RxQ layout, we know that all threads in a block
-        # work on the same R. So, we calculate R-norm together, and store it in shared memory so all threads can access it later on
-        score_norm_spec1_sh = cuda.shared.array(1, types.float32)
-        score_norm_spec1_sh[0] = 0
-        cuda.syncthreads()
-        scale = (rleni + cuda.blockDim.y - 1) // cuda.blockDim.y
+        scale = max(8, (rleni + cuda.blockDim.y - 1) // cuda.blockDim.y)
         norm_accum = 0.0
         for ix in range(thread_j * scale, min((thread_j + 1) * scale, rleni)):
             norm_accum += (spec1_mz[ix] ** mz_power * spec1_int[ix] ** int_power) ** 2
-        spec1_mz_sh = spec1_mz
-        spec1_int_sh = spec1_int
 
-        ## Needs blocksize small enough, i.e. 1,4?
         cuda.atomic.add(score_norm_spec1_sh, 0, norm_accum)
         cuda.syncthreads()
         score_norm_spec1 = score_norm_spec1_sh[0]
@@ -106,6 +102,8 @@ def cosine_greedy_kernel(
             score_norm_spec2 += (spec2_mz[ix] ** mz_power * spec2_int[ix] ** int_power) ** 2
         score_norm = math.sqrt(score_norm_spec1) * math.sqrt(score_norm_spec2)
         
+        spec1_mz_sh = spec1_mz
+        spec1_int_sh = spec1_int
         matches = cuda.local.array(MATCH_LIMIT, types.int32)
         values = cuda.local.array(MATCH_LIMIT, types.float32)
         
@@ -120,6 +118,8 @@ def cosine_greedy_kernel(
             int_r = spec1_int_sh[peak1_idx]
 
             for peak2_idx in range(lowest_idx, qlenj):
+                if overflow:
+                    break
                 mz_q = spec2_mz[peak2_idx]
                 delta = mz_q + shift - mz_r
                 if delta > tolerance:
@@ -157,7 +157,7 @@ def cosine_greedy_kernel(
         temp_matches = cuda.local.array(MATCH_LIMIT, types.int32)
         temp_values = cuda.local.array(MATCH_LIMIT, types.float32)
 
-        k = types.uint32(1)
+        k = types.int32(1)
         while k < num_match:
             for left in range(0, num_match - k, k * 2):
                 rght = left + k
@@ -198,7 +198,7 @@ def cosine_greedy_kernel(
 
         used_matches = 0
         score = 0.0
-        for m in range(0, num_match):
+        for m in range(num_match):
             c = matches[m]
             peak1_idx = c >> 16
             peak2_idx = c & 0x0000_FFFF

@@ -114,7 +114,7 @@ def test_cosine_greedy_pair(
 
     assert score["score"] == pytest.approx(
         expected_score, 0.0001
-    ), "Expected different cosine score."
+    ), f"Expected different cosine score. {score['score']:.5f} {expected_score:.5f}"
     assert score["matches"] == len(
         expected_matches[0]
     ), "Expected different number of matching peaks."
