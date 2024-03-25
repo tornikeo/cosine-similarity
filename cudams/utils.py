@@ -61,7 +61,7 @@ def ignore_performance_warnings():
 def spectra_peaks_to_tensor(
     spectra: list,
     dtype: str = "float32",
-    pad: int = None,
+    n_max_peaks: int = None,
     ignore_null_spectra: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -73,25 +73,16 @@ def spectra_peaks_to_tensor(
         spectra: [2, len(spectra)] float32
         batch: [len(spectra)] int32
     """
-    if pad is None:
-        sp_max_shape = max(len(s.peaks) for s in spectra)
-    else:
-        sp_max_shape = pad
+    dynamic_shape = max(len(s.peaks) for s in spectra)
+    n_max_peaks = dynamic_shape if n_max_peaks is None else n_max_peaks 
 
-    if sp_max_shape > 2048:
-        warnings.warn(
-            "Some spectra are very long (>2048 peaks), consider using `matchms.filtering.reduce_to_number_of_peaks` to"
-            "avoid unnecessarily long computation times."
-        )
-
-    mz = np.empty((len(spectra), sp_max_shape), dtype=dtype)
-    int = np.empty((len(spectra), sp_max_shape), dtype=dtype)
+    mz = np.empty((len(spectra), n_max_peaks), dtype=dtype)
+    int = np.empty((len(spectra), n_max_peaks), dtype=dtype)
     batch = np.empty(len(spectra), dtype=np.int32)
     for i, s in enumerate(spectra):
         if s is not None:
             # .to_numpy creates an unneeded copy - we don't need to do that twice
-            # spec_len = min(len(s.peaks), spectra_len_cutoff)
-            spec_len = min(len(s.peaks), sp_max_shape)
+            spec_len = min(len(s.peaks), n_max_peaks)
             mz[i, :spec_len] = s._peaks.mz[:spec_len]
             int[i, :spec_len] = s._peaks.intensities[:spec_len]
             batch[i] = spec_len
@@ -256,26 +247,17 @@ def download(
         "ALL_GNPS.pickle",
         "GNPS-LIBRARY.mgf",
         "GNPS-LIBRARY.pickle",
+        "GNPS-LIBRARY-default-filter-nmax-2048.pickle",
+        "GNPS-LIBRARY-default-filter-nmax-1024.pickle",
         "pesticides.mgf",
         "GNPS-MSMLS.mgf",
         "MASSBANK.mgf",
     ]
 ) -> str:
     import pooch
-
-    if "ALL_GNPS" in name:
-        warnings.warn(
-            f"As of 2024, {name} is a large file (1.76GB) make sure the machine can handle this"
-        )
-
-    known_hash = {
-        "GNPS-LIBRARY.mgf": "235f7518536e4b04a4fd11def3d60cffada2760ceee8e96ca356d873dbb2b440",
-        "ALL_GNPS.mgf": "22dcd7a254393688936d6c530abc3927be3bb0997125bd54dc94eff8b65947f8",
-    }
-
     return pooch.retrieve(
         url=f"https://github.com/tornikeo/cosine-similarity/releases/download/samples-0.1/{name}",
-        known_hash=known_hash.get(name),
+        known_hash=None,
         progressbar=True,
     )
 

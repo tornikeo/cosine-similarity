@@ -8,8 +8,6 @@ from matchms.similarity.spectrum_similarity_functions import (
 from numba import cuda, pndindex, prange, types
 from torch import Tensor
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
 
 def cosine_greedy_kernel(
     tolerance: float = 0.1,
@@ -45,65 +43,67 @@ def cosine_greedy_kernel(
         lens,
         out,
     ):
-        ## Get global indices
+        ## PREAMBLE:
+        # Get global indices
         i, j = cuda.grid(2)
         thread_i = cuda.threadIdx.x
         thread_j = cuda.threadIdx.y
         block_size_x = cuda.blockDim.x
         block_size_y = cuda.blockDim.y
         
-        ## PART 1, CALCULATE SCORE NORMS
-        # Since blocksize is 1xN, with RxQ layout, we know that all threads in a block
-        # work on the same R. So, we calculate R-norm together, and store it in shared memory so all threads can access it later on
-        score_norm_spec1_sh = cuda.shared.array(1, types.float32)
-        score_norm_spec1_sh[0] = 0
-        cuda.syncthreads()
-
-        # We aren't out of the RxQ grid
+        # Check we aren't out of the max possible grid size
         if i >= R or j >= Q:
             return
+        
 
-        # Init values (we expect these to be uninitialized)
+        # Set zeros, since we know we are in the grid
         out[0, i, j] = 0
         out[1, i, j] = 0
         out[2, i, j] = 0
-
-        # Unpack mz and int from arrays
-        rmz = rspec[0] 
-        rint = rspec[1]
-        qmz = qspec[0]
-        qint = qspec[1]
 
         # Get actual length of R and Q spectra
         rleni = lens[0, i]
         qlenj = lens[1, j]
 
-        # Check that both spectra are non-empty
+        # We are in the grid, but current ij pair might be just a padding.
+        # We check that and exit quickly if so.
         if rleni == 0 or qlenj == 0:
             return
 
+        # We unpack mz and int from arrays
+        rmz = rspec[0] 
+        rint = rspec[1]
+        qmz = qspec[0]
+        qint = qspec[1]
         spec1_mz = rmz[i]
         spec1_int = rint[i]
-
         spec2_mz = qmz[j]
         spec2_int = qint[j]
-
+        
+        #### PART 1: CALCULATE SCORE NORMS ####
+        # All the block shares the single R, so we calculate R's norm in a group
+        # So, we calculate R-norm in a group, and store it in shared memory so all threads can access it later on
+        score_norm_spec1_sh = cuda.shared.array(1, types.float32)
+        score_norm_spec1_sh[0] = 0
+        cuda.syncthreads()
         scale = max(8, (rleni + cuda.blockDim.y - 1) // cuda.blockDim.y)
         norm_accum = 0.0
         for ix in range(thread_j * scale, min((thread_j + 1) * scale, rleni)):
             norm_accum += (spec1_mz[ix] ** mz_power * spec1_int[ix] ** int_power) ** 2
-
         cuda.atomic.add(score_norm_spec1_sh, 0, norm_accum)
         cuda.syncthreads()
         score_norm_spec1 = score_norm_spec1_sh[0]
         
+        # Since Qs are different, each thread calculates their own norm factor for Q
         score_norm_spec2 = types.float32(0.0)
         for ix in range(qlenj):
             score_norm_spec2 += (spec2_mz[ix] ** mz_power * spec2_int[ix] ** int_power) ** 2
         score_norm = math.sqrt(score_norm_spec1) * math.sqrt(score_norm_spec2)
-        
         spec1_mz_sh = spec1_mz
         spec1_int_sh = spec1_int
+
+        #### PART 2: Find matches ####
+        # On GPU global memory, we allocate temporary arrays for values and matches
         matches = cuda.local.array(MATCH_LIMIT, types.int32)
         values = cuda.local.array(MATCH_LIMIT, types.float32)
         
@@ -132,28 +132,27 @@ def cosine_greedy_kernel(
                         power_prod_spec1 = mz_r ** mz_power * int_r ** int_power
                         power_prod_spec2 = mz_q ** mz_power * int_q ** int_power
                         prod = power_prod_spec1 * power_prod_spec2
-
+                        # Binary trick! We pack two 16bit ints in 32bit int to use less memory
+                        # since we know that largest imaginable peak index can fit in 13 bits
                         matches[num_match] = (peak1_idx << 16) | peak2_idx
                         values[num_match] = prod
                         num_match += 1
                         overflow = num_match >= MATCH_LIMIT  # This is the errorcode for overflow
+
         out[2, i, j] = overflow
         
-        ## Debug checkpoint
-        # out[i, j, 0] = 1
-        # out[i, j, 1] = num_match
-        # return
         if num_match == 0:
             return
-        # score_norm = types.float32(1.0)
-        # score_norm_spec1 = types.float32(0.0)
 
         # Debug checkpoint
         # out[i, j, 0] = score_norm
         # out[i, j, 1] = num_match
         # return
 
-        ## Non-recursive mergesort
+        #### PART: 2 ####
+        # We use as non-recursive mergesort to order matches by the cosine produc
+        # We need an O(MATCH_LIMIT) auxiliary memory for this.
+
         temp_matches = cuda.local.array(MATCH_LIMIT, types.int32)
         temp_values = cuda.local.array(MATCH_LIMIT, types.float32)
 
@@ -189,10 +188,12 @@ def cosine_greedy_kernel(
                     values[m] = temp_values[m]; 
             k *= 2
 
+
+        #### PART: 3 Accumulate and deduplicate matches from largest to smallest ####
         used_r = cuda.local.array(N_MAX_PEAKS, types.boolean)
         used_q = cuda.local.array(N_MAX_PEAKS, types.boolean)
 
-        for m in range(max(rleni,qlenj)):
+        for m in range(N_MAX_PEAKS):
             used_r[m] = False
             used_q[m] = False
 
@@ -207,9 +208,12 @@ def cosine_greedy_kernel(
                 used_q[peak2_idx] = True
                 score += values[m];
                 used_matches += 1
+            
 
-        # TODO: VERY slow - Bubble sort (This should also be done in several threads)
-        # We need two cases, bubble sort up to 50 elems is fine
+        #### PART 2: ALTENRNATIVE SORT+ACCUMULATE PATHWAY ####
+        # This pathway is much faster when matches and average scores are *extremely* rare
+        # TODO: We should compile both kernels, compare perfs and use fastest kernel.
+        # else:
         # score = types.float32(0.0)
         # used_matches = types.uint16(0)
         # for _ in range(0, num_match):
@@ -245,18 +249,6 @@ def cosine_greedy_kernel(
         #         used_matches += 1
         #     else:
         #         break
-
-        # debug checkpoint
-        # out[i, j, 0] = score_norm
-        # out[i, j, 1] = used_matches
-        # return
-
-        # out[i, j, 0] = matches[0, MATCH_LIMIT-1]
-        # out[i, j, 1] = matches[1, MATCH_LIMIT-1]
-
-        # out[i, j, 0] = matches[0, 0]
-        # out[i, j, 1] = matches[1, 0]
-        # return
 
         out[0, i, j] = score / score_norm
         out[1, i, j] = used_matches
