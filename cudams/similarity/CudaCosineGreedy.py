@@ -220,7 +220,13 @@ class CudaCosineGreedy(BaseSimilarity):
                         bunch["overflow"]
                     ))
 
-                result = np.rec.fromarrays(np.concatenate(result, axis=1))
+                result = np.rec.fromarrays(
+                    np.concatenate(result, axis=1),
+                    dtype=[('q_idx', np.int64), 
+                           ('r_idx', np.int64), 
+                           ('score', np.float32),
+                           ('matches', np.int32), 
+                           ('overflow', np.int32)])
                 return result
                 # rabs = []
                 # qabs = []
