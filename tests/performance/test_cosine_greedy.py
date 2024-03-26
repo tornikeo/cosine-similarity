@@ -21,7 +21,10 @@ def test_performance(
     array_type: str,
     sparse_threshold: float,
 ):
-    kernel = CudaCosineGreedy(batch_size=batch_size, match_limit=match_limit, verbose=False)
+    kernel = CudaCosineGreedy(batch_size=batch_size,
+                              match_limit=match_limit, 
+                              sparse_threshold=sparse_threshold,
+                              verbose=False)
     n = 3
     # Warm-up
     kernel.matrix(gnps[:8], gnps[:8])
@@ -31,7 +34,6 @@ def test_performance(
             gnps[:batch_size],
             gnps[:batch_size],
             array_type=array_type,
-            score_threshold=sparse_threshold
         )
         times.append(kernel.kernel_time)
     times = np.array(times)

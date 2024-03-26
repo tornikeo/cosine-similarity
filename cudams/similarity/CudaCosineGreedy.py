@@ -1,9 +1,7 @@
-import math
 import warnings
 from itertools import product
 from pathlib import Path
 from typing import List, Literal
-
 import numpy as np
 import torch
 from matchms import Spectrum
@@ -11,7 +9,7 @@ from matchms.similarity.BaseSimilarity import BaseSimilarity
 from numba import cuda
 from ..utils import CudaTimer
 from tqdm import tqdm
-
+from sparsestack import StackedSparseArray
 from ..utils import argbatch
 from .spectrum_similarity_functions import cosine_greedy_kernel
 
@@ -32,6 +30,7 @@ class CudaCosineGreedy(BaseSimilarity):
         batch_size: int = 2048,
         n_max_peaks: int = 1024,
         match_limit: int = 2048,
+        sparse_threshold: float = .75,
         verbose=False,
     ):
         self.tolerance = tolerance
@@ -44,6 +43,7 @@ class CudaCosineGreedy(BaseSimilarity):
         self.n_max_peaks = n_max_peaks
         self.kernel_time = 0 # Used for debugging and timing
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.sparse_threshold = sparse_threshold
 
         self.kernel = cosine_greedy_kernel(
             tolerance=self.tolerance,
@@ -108,9 +108,8 @@ class CudaCosineGreedy(BaseSimilarity):
         self,
         references: List[Spectrum],
         queries: List[Spectrum],
-        array_type: Literal["numpy", "sparse", "memmap"] = "numpy",
+        array_type: Literal["numpy", "sparse"] = "numpy",
         is_symmetric: bool = False,
-        score_threshold: float = None,
     ) -> np.ndarray:
         """Provide optimized method to calculate an np.array of similarity scores
         for given reference and query spectrums.
@@ -122,23 +121,19 @@ class CudaCosineGreedy(BaseSimilarity):
         queries
             List of query objects
         array_type
-            Specify the output array type. Can be "numpy", or "memmap"
+            Specify the output array type. Can be "numpy" or "sparse"
         is_symmetric
             Set to True when *references* and *queries* are identical (as for instance for an all-vs-all
             comparison). By using the fact that score[i,j] = score[j,i] the calculation will be about
             2x faster.
-        threshold:
-            Useful when using `array_type=sparse` and very large number of spectra. All scores < threshold are set to 0
-            and the resulting large sparse score matrix is returned as a scipy.sparse matrix (both scores and overflows)
         """
         assert self.kernel is not None, "Kernel isn't compiled - use .compile() first"
         if is_symmetric:
             warnings.warn("is_symmetric is ignored here, it has no effect.")
 
         if array_type == 'sparse':
-            assert score_threshold is not None, "When using array_type `sparse` you have to set `score_threshold`. Scores below this will get discarded."
-            assert 0 <= score_threshold <= 1, "Score threshold must be in [0, 1] range."
-        
+            assert self.sparse_threshold is not None, "When using array_type `sparse` you have to set `score_threshold`. Scores below this will get discarded."
+            assert 0 <= self.sparse_threshold <= 1, "Score threshold must be in [0, 1] range."
 
         batched_inputs = self._get_batches(references=references, queries=queries)
         R, Q = len(references), len(queries)
@@ -147,7 +142,7 @@ class CudaCosineGreedy(BaseSimilarity):
         if array_type == "numpy":
             result = torch.empty(3, R, Q, dtype=torch.float32, device=self.device)
         elif array_type == "sparse":
-            results = []
+            result = []
 
         self.kernel_time = 0
         with torch.no_grad():
@@ -189,12 +184,12 @@ class CudaCosineGreedy(BaseSimilarity):
                 if array_type == 'numpy':
                     result[:, rstart:rend, qstart:qend] = out[:, :len(rlen), :len(qlen)]
                 elif array_type == 'sparse':
-                    mask = out[0] >= score_threshold
+                    mask = out[0] >= self.sparse_threshold
                     row, col = torch.nonzero(mask, as_tuple=True)
                     rabs = (rstart + row).cpu()
                     qabs = (qstart + col).cpu()
-                    score, matches, overflow = out[:, mask].to(self.device)
-                    results.append(
+                    score, matches, overflow = out[:, mask].cpu()
+                    result.append(
                         dict(
                             rabs=rabs.int().cpu().numpy(),
                             qabs=qabs.int().cpu().numpy(),
@@ -203,46 +198,30 @@ class CudaCosineGreedy(BaseSimilarity):
                             overflow=overflow.bool().cpu().numpy(),
                         )
                     )
-
             if array_type == 'numpy':
                 return np.rec.fromarrays(
                     result.cpu().numpy(),
                     dtype=self.score_datatype,
                 )
             elif array_type == 'sparse':
-                result = []
-                for bunch in tqdm(results, disable=not self.verbose):
-                    result.append((
-                        bunch["qabs"],
-                        bunch["rabs"],
-                        bunch["score"],
-                        bunch["matches"],
-                        bunch["overflow"]
-                    ))
-
-                result = np.rec.fromarrays(
-                    np.concatenate(result, axis=1),
-                    dtype=[('q_idx', np.int64), 
-                           ('r_idx', np.int64), 
-                           ('score', np.float32),
-                           ('matches', np.int32), 
-                           ('overflow', np.int32)])
-                return result
-                # rabs = []
-                # qabs = []
-                # score = []
-                # matches = []
-                # overflow = []
-                # for bunch in tqdm(results, disable=not self.verbose):
-                #     qabs += [bunch["qabs"]]
-                #     rabs += [bunch["rabs"]]
-                #     score += [bunch["score"]]
-                #     matches += [bunch["matches"]]
-                #     overflow += [bunch["overflow"]]
-
-                # qabs = np.concatenate(qabs)
-                # rabs = np.concatenate(rabs)
-                # score = np.concatenate(score)
-                # matches = np.concatenate(matches)
-                # overflow = np.concatenate(overflow)
-                # return np.rec.fromarrays([qabs, rabs, score, matches, overflow])
+                sp = StackedSparseArray(len(references), len(queries))
+                r, q, s, m, o = [],[],[],[],[]
+                for bunch in tqdm(result, disable=not self.verbose):
+                    r.append(bunch["rabs"]),
+                    q.append(bunch["qabs"])
+                    s.append(bunch["score"]),
+                    m.append(bunch["matches"],)
+                    o.append(bunch["overflow"])
+                q = np.array(q)
+                r = np.array(r)
+                s = np.array(s)
+                m = np.array(m)
+                o = np.array(o)
+                sp.add_sparse_data(
+                    r, q, np.rec.fromarrays(
+                        arrayList=[s, m, o],
+                        names=['score', 'matches', 'overflow'],
+                    ),
+                    name='sparse',
+                )
+                return sp
