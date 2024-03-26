@@ -101,4 +101,3 @@ def gnps_with_fingerprint(gnps: list):
     from matchms.filtering import add_fingerprint
     spectra = [add_fingerprint(s) for s in gnps]
     return spectra
-

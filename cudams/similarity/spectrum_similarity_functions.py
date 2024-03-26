@@ -30,10 +30,10 @@ def cosine_greedy_kernel(
     # It is faster to have a block that runs same reference, over multiple
     # queries, so that thread divergence is minimized
     THREADS_PER_BLOCK_X = 1
-    THREADS_PER_BLOCK_Y = 512 + 256
+    THREADS_PER_BLOCK_Y = 512
     THREADS_PER_BLOCK = (THREADS_PER_BLOCK_X, THREADS_PER_BLOCK_Y)
-    BLOCKS_PER_GRID_X = math.ceil(R / THREADS_PER_BLOCK_X)
-    BLOCKS_PER_GRID_Y = math.ceil(Q / THREADS_PER_BLOCK_Y)
+    BLOCKS_PER_GRID_X = (R + THREADS_PER_BLOCK_X - 1) // THREADS_PER_BLOCK_X
+    BLOCKS_PER_GRID_Y = (Q + THREADS_PER_BLOCK_Y - 1) // THREADS_PER_BLOCK_Y
     BLOCKS_PER_GRID = (BLOCKS_PER_GRID_X, BLOCKS_PER_GRID_Y)
 
     @cuda.jit
@@ -54,46 +54,55 @@ def cosine_greedy_kernel(
         # Check we aren't out of the max possible grid size
         if i >= R or j >= Q:
             return
-        
 
         # Set zeros, since we know we are in the grid
         out[0, i, j] = 0
         out[1, i, j] = 0
         out[2, i, j] = 0
 
-        # Get actual length of R and Q spectra
+        # Get actual length of R
         rleni = lens[0, i]
-        qlenj = lens[1, j]
 
         # We are in the grid, but current ij pair might be just a padding.
-        # We check that and exit quickly if so.
-        if rleni == 0 or qlenj == 0:
+        # We check that and exit quickly if so. 
+        # NOTE: We don't exit for q being zero yet! Current thread might have 
+        # to do work for summing the norm of R first!
+        if rleni == 0:
             return
 
         # We unpack mz and int from arrays
         rmz = rspec[0] 
         rint = rspec[1]
-        qmz = qspec[0]
-        qint = qspec[1]
         spec1_mz = rmz[i]
         spec1_int = rint[i]
-        spec2_mz = qmz[j]
-        spec2_int = qint[j]
         
         #### PART 1: CALCULATE SCORE NORMS ####
         # All the block shares the single R, so we calculate R's norm in a group
         # So, we calculate R-norm in a group, and store it in shared memory so all threads can access it later on
         score_norm_spec1_sh = cuda.shared.array(1, types.float32)
         score_norm_spec1_sh[0] = 0
+        num_active_threads_sh = cuda.shared.array(1, types.int32)
+        num_active_threads_sh[0] = 0
         cuda.syncthreads()
-        scale = max(8, (rleni + cuda.blockDim.y - 1) // cuda.blockDim.y)
+        cuda.atomic.add(num_active_threads_sh, 0, 1)
+        cuda.syncthreads()
+        num_active_threads = num_active_threads_sh[0]
+        window = (rleni + num_active_threads - 1) // num_active_threads
         norm_accum = 0.0
-        for ix in range(thread_j * scale, min((thread_j + 1) * scale, rleni)):
+        for ix in range(thread_j * window, min(thread_j * window + window, rleni)):
             norm_accum += (spec1_mz[ix] ** mz_power * spec1_int[ix] ** int_power) ** 2
         cuda.atomic.add(score_norm_spec1_sh, 0, norm_accum)
         cuda.syncthreads()
         score_norm_spec1 = score_norm_spec1_sh[0]
         
+        # Now, with work done, threads that have padding Q can exit peacefully.
+        qlenj = lens[1, j]
+        if qlenj == 0:
+            return
+        qmz = qspec[0]
+        qint = qspec[1]
+        spec2_mz = qmz[j]
+        spec2_int = qint[j]
         # Since Qs are different, each thread calculates their own norm factor for Q
         score_norm_spec2 = types.float32(0.0)
         for ix in range(qlenj):
@@ -192,7 +201,6 @@ def cosine_greedy_kernel(
         #### PART: 3 Accumulate and deduplicate matches from largest to smallest ####
         used_r = cuda.local.array(N_MAX_PEAKS, types.boolean)
         used_q = cuda.local.array(N_MAX_PEAKS, types.boolean)
-
         for m in range(N_MAX_PEAKS):
             used_r[m] = False
             used_q[m] = False

@@ -11,7 +11,6 @@ from itertools import product
 from pathlib import Path
 from typing import Iterable, List, Literal, Optional
 
-from numba import cuda
 import numpy as np
 import pandas as pd
 from matchms import Spectrum
@@ -20,7 +19,7 @@ from matchms.filtering import (add_losses, normalize_intensities,
                                require_minimum_number_of_peaks, select_by_mz,
                                select_by_relative_intensity)
 from tqdm import tqdm
-
+from numba import cuda
 
 def argbatch(lst: list, batch_size: int) -> Iterable[tuple[int, int]]:
     """

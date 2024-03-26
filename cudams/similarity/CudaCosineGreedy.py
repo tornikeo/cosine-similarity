@@ -63,10 +63,13 @@ class CudaCosineGreedy(BaseSimilarity):
     def _spectra_peaks_to_tensor(
         self, 
         spectra: list,
-        n_max_peaks: int = None,
     ) -> tuple[np.ndarray, np.ndarray]:
+        
         dynamic_shape = max(len(s.peaks) for s in spectra)
-        n_max_peaks = dynamic_shape if n_max_peaks is None else n_max_peaks 
+        if self.n_max_peaks is None:
+            n_max_peaks = dynamic_shape
+        else:
+            n_max_peaks = self.n_max_peaks
         
         dtype = self.score_datatype[0][1]
 
