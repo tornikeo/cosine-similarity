@@ -5,11 +5,12 @@ import pytest
 from matchms import Scores, Spectrum, calculate_scores
 from matchms.similarity import (BaseSimilarity, CosineGreedy,
                                 FingerprintSimilarity)
-
 from cudams.similarity import CudaCosineGreedy, CudaFingerprintSimilarity
-
 from ..builder_Spectrum import SpectrumBuilder
+from joblib import Memory
 
+
+memory = Memory(location="cache")
 
 def equality_function_cosine_greedy(scores: Scores, scores_cu: Scores):
     score = scores[f"CosineGreedy_score"]
