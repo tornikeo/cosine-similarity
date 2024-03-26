@@ -221,7 +221,7 @@ class CudaCosineGreedy(BaseSimilarity):
                     ))
 
                 result = np.rec.fromarrays(np.concatenate(result, axis=1))
-
+                return result
                 # rabs = []
                 # qabs = []
                 # score = []
