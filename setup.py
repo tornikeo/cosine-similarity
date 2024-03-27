@@ -35,7 +35,6 @@ setup(
         "matchms>=0.24.0",
         "numba",
         "numpy",
-        "torch",
         "rdkit",
         "h5py",
         "pandas",
